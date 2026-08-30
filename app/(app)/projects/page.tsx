@@ -8,7 +8,7 @@ import { ProjectGrid } from "@/app/_features/projects/ProjectGrid";
 import { ProjectEmptyState } from "@/app/_features/projects/ProjectEmptyState";
 import styles from "@/app/_features/projects/projects.module.css";
 
-type Sort = "updated" | "name" | "cases" | "endpoints";
+type Sort = "name" | "cases" | "endpoints";
 
 const header = (
   <PageHeader
@@ -16,7 +16,12 @@ const header = (
     description="Create, organize and run isolated mock APIs for development and testing."
     actions={
       <Tooltip label="Preview — coming soon">
-        <Button variant="primary" disabled>
+        <Button
+          variant="primary"
+          aria-disabled={true}
+          className={styles.disabledBtn}
+          onClick={(e) => e.preventDefault()}
+        >
           New Project
         </Button>
       </Tooltip>
@@ -28,7 +33,7 @@ export default function ProjectsPage() {
   const { projects } = useViewModel();
   const [q, setQ] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [sort, setSort] = useState<Sort>("updated");
+  const [sort, setSort] = useState<Sort>("name");
   const query = useDebounced(q, 150).trim().toLowerCase();
 
   const visible = useMemo(() => {
@@ -81,7 +86,6 @@ export default function ProjectsPage() {
           value={sort}
           onChange={(e) => setSort(e.target.value as Sort)}
         >
-          <option value="updated">Updated</option>
           <option value="name">Name</option>
           <option value="cases">Cases</option>
           <option value="endpoints">Endpoints</option>

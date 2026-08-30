@@ -17,7 +17,6 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  outline: none;
 }
 
 .search:focus {
@@ -26,6 +25,11 @@
 
 .search::placeholder {
   color: var(--text-muted);
+}
+
+.disabledBtn {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .noMatch {
@@ -140,10 +144,6 @@
   height: 7px;
   border-radius: 50%;
   background: var(--success);
-}
-
-.updated {
-  color: var(--text-muted);
 }
 
 .cardActions {

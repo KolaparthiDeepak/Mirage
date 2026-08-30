@@ -1,14 +1,13 @@
 import Link from "next/link";
 import type { ProjectVM } from "@/src/viewer/model";
 import { CopyButton } from "@/app/_ui";
+import { mockBaseUrl } from "@/app/_lib/mock-url";
 import { CubeGlyph } from "./ProjectCard";
 import styles from "./projects.module.css";
 
-const BASE_HOST = "mockservers.dailyuze.com/m";
-
 export function ProjectListRow({ project }: { project: ProjectVM }) {
   const href = `/p/${project.slug}`;
-  const baseUrl = `${BASE_HOST}/${project.slug}`;
+  const baseUrl = mockBaseUrl(project.slug, project.basePath);
   return (
     <article className={styles.row}>
       <span className={styles.glyph}>
@@ -27,7 +26,7 @@ export function ProjectListRow({ project }: { project: ProjectVM }) {
         <span className={styles.runningDot} aria-hidden="true" />
         Running
       </span>
-      <CopyButton text={`https://${baseUrl}`} label="Copy URL" />
+      <CopyButton text={baseUrl} label="Copy URL" />
     </article>
   );
 }

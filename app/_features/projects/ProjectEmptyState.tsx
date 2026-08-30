@@ -11,7 +11,12 @@ export function ProjectEmptyState() {
         body="Create your first mock server and start simulating APIs."
         action={
           <Tooltip label="Preview — coming soon">
-            <Button variant="primary" disabled>
+            <Button
+              variant="primary"
+              aria-disabled={true}
+              className={styles.disabledBtn}
+              onClick={(e) => e.preventDefault()}
+            >
               Create project
             </Button>
           </Tooltip>
