@@ -92,13 +92,15 @@ Fully specified below. Phases 2–6 are task inventories (after Phase 1); each i
 
 **Why:** `vitest.config.ts` currently sets `environment: "node"` and no DOM / component-testing libs are installed. Tasks 3, 4, 6, 7, 8, 10 render React components in tests. This task adds the minimum to make that possible — the one dependency exception named in Global Constraints.
 
+**A global flip to `environment: "jsdom"` is NOT viable:** it breaks 9 pre-existing tests (`src/openapi/expand.test.ts`, `src/compile/compile.test.ts`) — jsdom's fetch polyfill fails `AbortSignal` validation inside `@apidevtools/swagger-parser`. Use a per-file split instead: `.test.ts` stays on node, `.test.tsx` runs on jsdom.
+
 **Files:**
-- Modify: `vitest.config.ts` (`environment: "node"` → `"jsdom"`)
+- Modify: `vitest.config.ts` — keep `environment: "node"`, add `environmentMatchGlobs: [["app/**/*.test.tsx", "jsdom"]]` to the `test` block
 - Modify: `package.json`, `package-lock.json` (add devDeps)
 - Test: `app/_lib/smoke.test.tsx`
 
 **Interfaces:**
-- Produces: a jsdom test environment; `@testing-library/react` `render` / `screen` available to every later task.
+- Produces: jsdom for every `app/**/*.test.tsx`; node for everything else; `@testing-library/react` `render` / `screen` available to later tasks. **Convention for later tasks: component render tests must be named `*.test.tsx`.**
 
 - [ ] **Step 1: Add dev dependencies**
 
@@ -122,23 +124,29 @@ describe("test infra", () => {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `npx vitest run app/_lib/smoke.test.tsx`
-Expected: FAIL — `document is not defined` (still `environment: "node"`).
+Run: `nvm use 22 && npx vitest run app/_lib/smoke.test.tsx`
+Expected: FAIL — `document is not defined` (still node for this file).
 
-- [ ] **Step 4: Flip the environment**
+- [ ] **Step 4: Add the per-file environment split**
 
-In `vitest.config.ts` change `environment: "node"` to `environment: "jsdom"`. Leave `include`, `exclude`, `passWithNoTests`, and the `@` alias exactly as they are.
+In `vitest.config.ts`, inside the `test: { ... }` object, keep `environment: "node"` and add:
+
+```ts
+environmentMatchGlobs: [["app/**/*.test.tsx", "jsdom"]],
+```
+
+Leave `include`, `exclude`, `passWithNoTests`, and the `@` alias exactly as they are. (`environmentMatchGlobs` is supported in vitest 2.1.8.)
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `npx vitest run`
-Expected: PASS — the new smoke test plus every pre-existing `src/**` and `app/**` test (70 tests as of branch start), all green under jsdom.
+Run: `nvm use 22 && npx vitest run`
+Expected: PASS — `app/_lib/smoke.test.tsx` green under jsdom, every pre-existing `src/**` and `app/**` test (70 as of branch start) still green under node. If any pre-existing `.test.ts` now fails, STOP — report BLOCKED.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add vitest.config.ts package.json package-lock.json app/_lib/smoke.test.tsx
-git commit -m "test: jsdom environment + React Testing Library for component tests
+git commit -m "test: per-file jsdom environment + React Testing Library for component tests
 
 Claude-Session: https://claude.ai/code/session_01MuK2fgcpXNhze3JYKrBSo5"
 ```
