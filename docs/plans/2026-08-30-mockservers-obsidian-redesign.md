@@ -88,6 +88,63 @@ Tests move with their code: `_explorer/format.test.ts` -> `_lib/format.test.ts`,
 
 Fully specified below. Phases 2–6 are task inventories (after Phase 1); each is expanded to bite-sized TDD steps by its own follow-up planning pass before execution, matching the design doc's six-phase split (each phase is independently shippable, `npm run check` green).
 
+### Task 0: Test infrastructure for component tests
+
+**Why:** `vitest.config.ts` currently sets `environment: "node"` and no DOM / component-testing libs are installed. Tasks 3, 4, 6, 7, 8, 10 render React components in tests. This task adds the minimum to make that possible — the one dependency exception named in Global Constraints.
+
+**Files:**
+- Modify: `vitest.config.ts` (`environment: "node"` → `"jsdom"`)
+- Modify: `package.json`, `package-lock.json` (add devDeps)
+- Test: `app/_lib/smoke.test.tsx`
+
+**Interfaces:**
+- Produces: a jsdom test environment; `@testing-library/react` `render` / `screen` available to every later task.
+
+- [ ] **Step 1: Add dev dependencies**
+
+Run: `nvm use 22 && npm i -D jsdom @testing-library/react @testing-library/dom`
+(These three are the entirety of the "one dev-dependency exception" from Global Constraints. No `@testing-library/jest-dom` — tests use `toBeDefined()` / `.textContent` / DOM property assertions only.)
+
+- [ ] **Step 2: Write the failing test**
+
+```tsx
+// app/_lib/smoke.test.tsx
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+
+describe("test infra", () => {
+  it("renders a React component into jsdom", () => {
+    render(<button>hello</button>);
+    expect(screen.getByRole("button", { name: "hello" })).toBeDefined();
+  });
+});
+```
+
+- [ ] **Step 3: Run to verify it fails**
+
+Run: `npx vitest run app/_lib/smoke.test.tsx`
+Expected: FAIL — `document is not defined` (still `environment: "node"`).
+
+- [ ] **Step 4: Flip the environment**
+
+In `vitest.config.ts` change `environment: "node"` to `environment: "jsdom"`. Leave `include`, `exclude`, `passWithNoTests`, and the `@` alias exactly as they are.
+
+- [ ] **Step 5: Run the full suite**
+
+Run: `npx vitest run`
+Expected: PASS — the new smoke test plus every pre-existing `src/**` and `app/**` test (70 tests as of branch start), all green under jsdom.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add vitest.config.ts package.json package-lock.json app/_lib/smoke.test.tsx
+git commit -m "test: jsdom environment + React Testing Library for component tests
+
+Claude-Session: https://claude.ai/code/session_01MuK2fgcpXNhze3JYKrBSo5"
+```
+
+---
+
 ### Task 1: Design tokens
 
 **Files:**
@@ -350,7 +407,7 @@ describe("view-model-context", () => {
 });
 ```
 
-> If `@testing-library/react` / `@testing-library/dom` are not in `package.json`, add them now: `npm i -D @testing-library/react @testing-library/dom`. Vitest + jsdom are already configured in `vitest.config.ts`. Add `import "@testing-library/react"` needs no jest-dom; assertions above use `toBeDefined()` only.
+> Test infra (jsdom + `@testing-library/react`) is set up in Task 0. Assertions use `toBeDefined()` / DOM properties only — no jest-dom matchers.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -390,7 +447,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/_lib/view-model-context.tsx app/_lib/view-model-context.test.tsx package.json package-lock.json
+git add app/_lib/view-model-context.tsx app/_lib/view-model-context.test.tsx
 git commit -m "feat(app): ViewModel React context
 
 Claude-Session: https://claude.ai/code/session_01MuK2fgcpXNhze3JYKrBSo5"
