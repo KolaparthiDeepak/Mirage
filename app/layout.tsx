@@ -1,23 +1,23 @@
 import type { ReactNode } from "react";
-import { Chivo, IBM_Plex_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const chivo = Chivo({
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "700", "900"],
-  variable: "--font-chivo",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-inter",
   display: "swap",
 });
 
-const plexMono = IBM_Plex_Mono({
+const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-plex-mono",
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains",
   display: "swap",
 });
 
 export const metadata = {
-  title: "mockservers",
+  title: "MOCKSERVERS",
   description: "Hosted, file-defined mock API server",
 };
 
@@ -26,7 +26,7 @@ const themeScript = `try{var t=localStorage.getItem('mockservers-theme');if(t===
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${chivo.variable} ${plexMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`} suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         {children}
