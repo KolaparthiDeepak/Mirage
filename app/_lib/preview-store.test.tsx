@@ -34,7 +34,7 @@ describe("preview-store", () => {
   });
   it("rehydrates from existing storage", () => {
     sessionStorage.setItem("mockservers-preview", JSON.stringify({
-      environments: SEED_ENVIRONMENTS, activeEnvId: SEED_ENVIRONMENTS[0].id,
+      environments: SEED_ENVIRONMENTS, activeEnvId: SEED_ENVIRONMENTS[0]!.id,
       variables: [{ id: "x", key: "A", value: "B", scope: "Global" }], scenarios: {}, rulesDraft: {},
     }));
     render(<PreviewProvider><Probe /></PreviewProvider>);

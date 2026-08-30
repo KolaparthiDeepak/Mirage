@@ -59,7 +59,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const set = useCallback((updater: (s: PreviewState) => PreviewState) => setState(updater), []);
-  const activeEnv = state.environments.find((e) => e.id === state.activeEnvId) ?? state.environments[0];
+  const activeEnv = state.environments.find((e) => e.id === state.activeEnvId) ?? state.environments[0]!; // environments is always seeded (>=1)
 
   return <Ctx.Provider value={{ state, set, activeEnv }}>{children}</Ctx.Provider>;
 }
