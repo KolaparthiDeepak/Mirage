@@ -11,4 +11,7 @@ export default defineConfig({
   resolve: {
     alias: { "@": new URL(".", import.meta.url).pathname },
   },
+  // tsconfig jsx is "preserve" for Next; esbuild needs the automatic runtime
+  // so test files render JSX without importing React.
+  esbuild: { jsx: "automatic" },
 });

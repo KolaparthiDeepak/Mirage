@@ -1,0 +1,95 @@
+.btn {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: var(--transition);
+  background: var(--surface-elevated);
+  color: var(--text);
+}
+.btn[data-variant="primary"] {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: transparent;
+}
+.btn[data-variant="primary"]:hover {
+  background: var(--accent-hover);
+}
+.btn[data-variant="ghost"] {
+  background: transparent;
+  border-color: transparent;
+}
+.btn[data-size="sm"] {
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+}
+
+.input {
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  color: var(--text);
+  transition: var(--transition);
+}
+.input[data-mono="true"] {
+  font-family: var(--font-mono);
+}
+
+.badge,
+.method {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-2);
+  color: var(--text-secondary);
+}
+.method {
+  font-family: var(--font-mono);
+}
+.badge[data-tone="neutral"],
+.method[data-tone="neutral"] {
+  color: var(--text-secondary);
+}
+.badge[data-tone="success"],
+.method[data-tone="success"] {
+  color: var(--success);
+}
+.badge[data-tone="warning"],
+.method[data-tone="warning"] {
+  color: var(--warning);
+}
+.badge[data-tone="error"],
+.method[data-tone="error"] {
+  color: var(--error);
+}
+.badge[data-tone="info"],
+.method[data-tone="info"] {
+  color: var(--info);
+}
+
+.sc {
+  font-family: var(--font-mono);
+}
+.sc[data-kind="2"] {
+  color: var(--success);
+}
+.sc[data-kind="4"] {
+  color: var(--warning);
+}
+.sc[data-kind="5"] {
+  color: var(--error);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--space-1);
+}
