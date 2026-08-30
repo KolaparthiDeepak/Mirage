@@ -34,7 +34,14 @@ function load(): PreviewState {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return initial();
     const parsed = JSON.parse(raw) as Partial<PreviewState>;
-    return { ...initial(), ...parsed };
+    const merged = { ...initial(), ...parsed };
+    if (!Array.isArray(merged.environments) || merged.environments.length === 0) {
+      merged.environments = SEED_ENVIRONMENTS;
+    }
+    if (!merged.environments.some((e) => e.id === merged.activeEnvId)) {
+      merged.activeEnvId = merged.environments[0]!.id;
+    }
+    return merged;
   } catch {
     return initial();
   }

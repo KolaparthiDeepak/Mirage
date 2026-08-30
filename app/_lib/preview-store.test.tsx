@@ -32,6 +32,12 @@ describe("preview-store", () => {
     const raw = sessionStorage.getItem("mockservers-preview");
     expect(raw && JSON.parse(raw).variables.length).toBe(1);
   });
+  it("clamps a corrupt empty environments array back to the seed", () => {
+    sessionStorage.setItem("mockservers-preview", JSON.stringify({ environments: [] }));
+    render(<PreviewProvider><Probe /></PreviewProvider>);
+    expect(screen.getByTestId("count").textContent).toBe(String(SEED_ENVIRONMENTS.length));
+    expect(screen.getByTestId("active").textContent).toBeTruthy();
+  });
   it("rehydrates from existing storage", () => {
     sessionStorage.setItem("mockservers-preview", JSON.stringify({
       environments: SEED_ENVIRONMENTS, activeEnvId: SEED_ENVIRONMENTS[0]!.id,
