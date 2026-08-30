@@ -35,15 +35,18 @@ const model = {
 afterEach(() => cleanup());
 
 describe("Sidebar", () => {
-  it("shows the PROJECT group inside a project and marks the active route", () => {
+  it("shows the PROJECT group and renders not-yet-built routes as non-links", () => {
     render(
       <ViewModelProvider model={model as never}>
         <Sidebar />
       </ViewModelProvider>,
     );
     expect(screen.getByText("Cases")).toBeDefined();
-    const active = screen.getByRole("link", { name: "Endpoints", current: "page" });
-    expect(active).toBeDefined();
+    // Overview has a real route
+    expect(screen.getByRole("link", { name: "Overview" })).toBeDefined();
+    // Endpoints is `soon` in both groups -> text present but no link
+    expect(screen.getAllByText("Endpoints").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Endpoints" })).toBeNull();
   });
 });
 

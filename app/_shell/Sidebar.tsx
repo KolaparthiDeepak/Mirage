@@ -3,23 +3,31 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import styles from "./shell.module.css";
 
-type NavItem = { label: string; href: string };
+type NavItem = { label: string; href: string; soon?: boolean };
 
 const WORKSPACE: NavItem[] = [
   { label: "Projects", href: "/projects" },
-  { label: "Endpoints", href: "/endpoints" },
-  { label: "Traffic", href: "/traffic" },
+  // TODO(phase-2): drop `soon` when /endpoints lands
+  { label: "Endpoints", href: "/endpoints", soon: true },
+  // TODO(phase-5): drop `soon` when /traffic lands
+  { label: "Traffic", href: "/traffic", soon: true },
 ];
 
 function projectItems(slug: string): NavItem[] {
   return [
     { label: "Overview", href: `/p/${slug}` },
-    { label: "Endpoints", href: `/p/${slug}/endpoints` },
-    { label: "Cases", href: `/p/${slug}/cases` },
-    { label: "Rules", href: `/p/${slug}/rules` },
-    { label: "Scenarios", href: `/p/${slug}/scenarios` },
-    { label: "Environments", href: `/p/${slug}/environments` },
-    { label: "Variables", href: `/p/${slug}/variables` },
+    // TODO(phase-2): drop `soon` when /p/<slug>/endpoints lands
+    { label: "Endpoints", href: `/p/${slug}/endpoints`, soon: true },
+    // TODO(phase-3): drop `soon` when /p/<slug>/cases lands
+    { label: "Cases", href: `/p/${slug}/cases`, soon: true },
+    // TODO(phase-3): drop `soon` when /p/<slug>/rules lands
+    { label: "Rules", href: `/p/${slug}/rules`, soon: true },
+    // TODO(phase-4): drop `soon` when /p/<slug>/scenarios lands
+    { label: "Scenarios", href: `/p/${slug}/scenarios`, soon: true },
+    // TODO(phase-4): drop `soon` when /p/<slug>/environments lands
+    { label: "Environments", href: `/p/${slug}/environments`, soon: true },
+    // TODO(phase-4): drop `soon` when /p/<slug>/variables lands
+    { label: "Variables", href: `/p/${slug}/variables`, soon: true },
   ];
 }
 
@@ -28,6 +36,18 @@ export function Sidebar({ className }: { className?: string }) {
   const slug = pathname.match(/^\/p\/([^/]+)/)?.[1];
 
   function navLink(item: NavItem) {
+    if (item.soon) {
+      return (
+        <span
+          key={item.href}
+          className={styles.navLinkSoon}
+          aria-disabled="true"
+          title="Coming soon"
+        >
+          {item.label}
+        </span>
+      );
+    }
     const active = pathname === item.href;
     return (
       <Link
@@ -53,7 +73,8 @@ export function Sidebar({ className }: { className?: string }) {
           <div className={styles.navGroupLabel}>Project</div>
           {projectItems(slug).map(navLink)}
           <div className={styles.spacer} />
-          {navLink({ label: "Settings", href: `/p/${slug}/settings` })}
+          {/* TODO(phase-5): drop `soon` when /p/<slug>/settings lands */}
+          {navLink({ label: "Settings", href: `/p/${slug}/settings`, soon: true })}
         </div>
       ) : null}
     </nav>
