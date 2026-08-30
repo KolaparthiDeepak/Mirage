@@ -11,11 +11,11 @@ describe("prettyBody", () => {
 });
 
 describe("verdictText", () => {
-  it("labels each verdict kind with a class", () => {
-    expect(verdictText({ kind: "hit", caseId: "x" })).toEqual({ text: "✓ matched case: x", cls: "mx-verdict--hit" });
-    expect(verdictText({ kind: "divert", landedOn: "y" }).cls).toBe("mx-verdict--divert");
-    expect(verdictText({ kind: "nomatch" }).cls).toBe("mx-verdict--nomatch");
-    expect(verdictText({ kind: "unknown" }).cls).toBe("mx-verdict--unknown");
+  it("labels each verdict kind with a semantic kind", () => {
+    expect(verdictText({ kind: "hit", caseId: "x" })).toEqual({ text: "✓ matched case: x", kind: "hit" });
+    expect(verdictText({ kind: "divert", landedOn: "y" }).kind).toBe("divert");
+    expect(verdictText({ kind: "nomatch" }).kind).toBe("nomatch");
+    expect(verdictText({ kind: "unknown" }).kind).toBe("unknown");
   });
 });
 

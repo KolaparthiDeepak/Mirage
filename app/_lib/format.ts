@@ -13,16 +13,18 @@ export function renderCurl(curl: string): string {
   return curl.split("$ORIGIN").join(origin);
 }
 
-export function verdictText(v: Verdict): { text: string; cls: string } {
+export type VerdictKind = "hit" | "divert" | "nomatch" | "unknown";
+
+export function verdictText(v: Verdict): { text: string; kind: VerdictKind } {
   switch (v.kind) {
     case "hit":
-      return { text: `✓ matched case: ${v.caseId}`, cls: "mx-verdict--hit" };
+      return { text: `✓ matched case: ${v.caseId}`, kind: "hit" };
     case "divert":
-      return { text: `→ landed on: ${v.landedOn}`, cls: "mx-verdict--divert" };
+      return { text: `→ landed on: ${v.landedOn}`, kind: "divert" };
     case "nomatch":
-      return { text: "→ no route matched (fell through to notFound)", cls: "mx-verdict--nomatch" };
+      return { text: "→ no route matched (fell through to notFound)", kind: "nomatch" };
     case "unknown":
-      return { text: "· could not confirm which case matched", cls: "mx-verdict--unknown" };
+      return { text: "· could not confirm which case matched", kind: "unknown" };
   }
 }
 
