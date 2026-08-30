@@ -7,7 +7,7 @@ export function CopyButton({
   text,
   label = "Copy",
 }: {
-  text: string;
+  text: string | (() => string);
   label?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -19,7 +19,8 @@ export function CopyButton({
   async function onClick() {
     try {
       if (!navigator.clipboard) throw new Error("clipboard unavailable");
-      await navigator.clipboard.writeText(text);
+      const value = typeof text === "function" ? text() : text;
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1200);

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ProjectVM } from "@/src/viewer/model";
 import { CopyButton } from "@/app/_ui";
-import { mockBaseUrl } from "@/app/_lib/mock-url";
+import { mockBaseUrl, mockPath } from "@/app/_lib/mock-url";
 import styles from "./projects.module.css";
 
 export function CubeGlyph() {
@@ -25,7 +25,7 @@ export function CubeGlyph() {
 
 export function ProjectCard({ project }: { project: ProjectVM }) {
   const href = `/p/${project.slug}`;
-  const baseUrl = mockBaseUrl(project.slug, project.basePath);
+  const baseUrl = mockPath(project.slug, project.basePath);
   return (
     <article className={styles.card}>
       <div className={styles.cardHead}>
@@ -65,7 +65,10 @@ export function ProjectCard({ project }: { project: ProjectVM }) {
         <Link href={href} className={styles.openLink}>
           Open
         </Link>
-        <CopyButton text={baseUrl} label="Copy URL" />
+        <CopyButton
+          text={() => mockBaseUrl(project.slug, project.basePath)}
+          label="Copy URL"
+        />
         <span className={styles.arrow} aria-hidden="true">
           →
         </span>

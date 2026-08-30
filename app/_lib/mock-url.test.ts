@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mockBaseUrl } from "./mock-url";
+import { mockBaseUrl, mockPath } from "./mock-url";
+
+describe("mockPath", () => {
+  it("is origin-free and SSR-stable", () => {
+    expect(mockPath("card-block-lost")).toBe("/m/card-block-lost");
+    expect(mockPath("card-block-lost", "/v1")).toBe("/m/card-block-lost/v1");
+  });
+});
 
 describe("mockBaseUrl", () => {
   it("joins origin, /m/, slug and basePath", () => {

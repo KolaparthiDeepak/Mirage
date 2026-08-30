@@ -53,6 +53,18 @@ describe("ui primitives", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Copied" })).toBeDefined());
   });
 
+  it("CopyButton resolves a function text prop at click time", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(
+      <ToastProvider>
+        <CopyButton text={() => "http://localhost:3000/m/x"} />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("http://localhost:3000/m/x"));
+  });
+
   it("CopyButton stays 'Copy' and toasts when the write rejects", async () => {
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
