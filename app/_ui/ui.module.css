@@ -329,8 +329,8 @@
   text-align: right;
   min-width: 2ch;
 }
-:global(.j-key) { color: var(--accent); }
-:global(.j-str) { color: var(--success); }
-:global(.j-num) { color: var(--info); }
-:global(.j-bool) { color: var(--warning); }
-:global(.j-null) { color: var(--text-muted); }
+.jsonPre :global(.j-key) { color: var(--accent); }
+.jsonPre :global(.j-str) { color: var(--success); }
+.jsonPre :global(.j-num) { color: var(--info); }
+.jsonPre :global(.j-bool) { color: var(--warning); }
+.jsonPre :global(.j-null) { color: var(--text-muted); }
