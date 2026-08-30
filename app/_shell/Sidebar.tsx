@@ -1,0 +1,61 @@
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import styles from "./shell.module.css";
+
+type NavItem = { label: string; href: string };
+
+const WORKSPACE: NavItem[] = [
+  { label: "Projects", href: "/projects" },
+  { label: "Endpoints", href: "/endpoints" },
+  { label: "Traffic", href: "/traffic" },
+];
+
+function projectItems(slug: string): NavItem[] {
+  return [
+    { label: "Overview", href: `/p/${slug}` },
+    { label: "Endpoints", href: `/p/${slug}/endpoints` },
+    { label: "Cases", href: `/p/${slug}/cases` },
+    { label: "Rules", href: `/p/${slug}/rules` },
+    { label: "Scenarios", href: `/p/${slug}/scenarios` },
+    { label: "Environments", href: `/p/${slug}/environments` },
+    { label: "Variables", href: `/p/${slug}/variables` },
+  ];
+}
+
+export function Sidebar({ className }: { className?: string }) {
+  const pathname = usePathname() ?? "";
+  const slug = pathname.match(/^\/p\/([^/]+)/)?.[1];
+
+  function navLink(item: NavItem) {
+    const active = pathname === item.href;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={active ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
+        aria-current={active ? "page" : undefined}
+      >
+        {item.label}
+      </Link>
+    );
+  }
+
+  return (
+    <nav className={[styles.sidebar, className].filter(Boolean).join(" ")}>
+      <div className={styles.navGroup}>
+        <div className={styles.navGroupLabel}>Workspace</div>
+        {WORKSPACE.map(navLink)}
+      </div>
+
+      {slug ? (
+        <div className={`${styles.navGroup} ${styles.navGroupGrow}`}>
+          <div className={styles.navGroupLabel}>Project</div>
+          {projectItems(slug).map(navLink)}
+          <div className={styles.spacer} />
+          {navLink({ label: "Settings", href: `/p/${slug}/settings` })}
+        </div>
+      ) : null}
+    </nav>
+  );
+}
