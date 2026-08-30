@@ -1040,24 +1040,201 @@ Claude-Session: https://claude.ai/code/session_01MuK2fgcpXNhze3JYKrBSo5"
 
 ---
 
-# PHASE 2 — Project pages + Endpoint Workspace + Runner (task inventory)
+# PHASE 2 — Project pages + Endpoint Workspace + Runner
 
-Each task expands to bite-sized TDD steps (test -> fail -> impl -> pass -> commit) in a Phase 2 planning pass before execution.
+Base at Phase 2 start: `8ad6ab2` (Phase 1 + review fixes + hotfix). 9 tasks (P2.0–P2.8), each: test → fail → implement → `npm run check` green → `npm run build` green → commit. All new page files are `"use client"` leaves under `app/(app)/` — the shell + providers are already mounted by `(app)/layout.tsx`.
 
-- **T2.1 `p/[slug]/layout.tsx` enrichment** — `<Breadcrumbs>` + project sub-nav context (the file exists as a stub from Task 9). Test: unknown slug -> `notFound()`.
-- **T2.2 Project Overview `p/[slug]/page.tsx` (PAGE 02)** — replace the stub: `<PageHeader>` name/description, status dot, mono base URL + `<CopyButton>`; `ProjectStats` strip (Endpoints, Cases from `ProjectVM`; Requests / Success rendered `—` + `<PreviewBadge>`); "Recent traffic" mini-list from `sample-traffic.ts` under a `<PreviewBadge>`. Test: counts render; preview markers present.
-- **T2.3 `EndpointList` + `EndpointRow` + `EndpointToolbar`** — salvage keyboard nav from `_explorer/EndpointList.tsx`; `<MethodPill>`; search + method filter + all/grouped segmented; case-count column. Test: filter narrows; arrow keys move selection.
-- **T2.4 Endpoints index `p/[slug]/endpoints/page.tsx` (PAGE 03)** — list view; row click -> `?e=<key>`; `+ New Endpoint` disabled + tooltip. Test: row click sets the query param (`useRouter` mock).
-- **T2.5 `CaseList` + `CaseRow` + `CaseDetail`** — salvage from `_explorer/CaseList.tsx`; status dot via `statusKind`, mono name, description from `match` summary, `<StatusCode>`, overflow `<Dropdown>` (items disabled/preview). Test: one row per case; keyboard selection.
-- **T2.6 `BodyEditor`** — textarea + line-number gutter; `Format` = `JSON.stringify(JSON.parse(x), null, 2)`, on throw keep text + inline `data-invalid` marker (does not block Execute); `Copy`, `Reset`. Test: valid pretties; invalid preserved + marker.
-- **T2.7 `HeadersEditor`** — textarea parsed by `parseHeaderLines`. Test: `a: b\nc: d` -> `{a:"b",c:"d"}`.
-- **T2.8 `RequestBuilder` + `RequestTabs`** — lift `execute()` from `_explorer/Runner.tsx` **verbatim** (same `fetch`, `noBody` rule, `performance.now` timing, `classifyResult`). Tabs: Body + Headers real; Params / Auth / Pre-request preview (empty-with-note). Method/URL row. `Execute` + `⌘↵` when focus within. Test: the moved `_explorer` runner-test assertions pass unchanged against the new component.
-- **T2.9 `ResponseViewer` + `VerdictLine`** — status / duration / `new Blob([bodyText]).size`; Body/Headers/Raw tabs; Pretty/Raw toggle; `<VerdictLine>` from `verdictText`. Test: size calc; status class; verdict text mapping (move `_explorer/trace.test.ts` verdict cases here).
-- **T2.10 `CodeGenerator`** — tabs cURL (real: `renderCurl`) / Java / Python / JavaScript / Go (preview "coming soon" panel). `⌘⇧C` copies cURL. Test: cURL tab output equals `renderCurl(draft.curl)`; other tabs show the preview note.
-- **T2.11 `EndpointWorkspace` (PAGE 04, hero)** — 3-col grid 232 / 288 / 1fr = `EndpointList` / `CaseList` / (`RequestBuilder` + `ResponseViewer` + `CodeGenerator`); selection from `?e=` / `?c=` query params (deep-linkable); under 960px columns become `<Tabs>`. Test: `?e=GET_CARD&c=locate-card-happy` selects both; changing selection updates the URL.
-- **T2.12 wire workspace into `p/[slug]/endpoints/page.tsx`** — `?e=` present -> `<EndpointWorkspace>`, else the list. Test: query param toggles the view.
-- **T2.13 Cases page `p/[slug]/cases/page.tsx` (PAGE 05)** — grouped `CaseList` across all endpoints; `+ Add case` disabled + tooltip. Test: renders every case.
-- **Phase 2 exit:** runner executes against live `card-block-lost` for every endpoint; cURL copy byte-identical to today; deep links resolve; `npm run check` + `npm run build` green.
+### Reference — types already in the repo (do NOT redefine; import from these frozen modules)
+
+```ts
+// @/src/viewer/model
+EndpointVM { key: string; method: string; path: string; runUrl: string; summary?: string; cases: CaseVM[] }
+CaseVM     { id: string; label: string; isOpenApiGenerated: boolean; match: MatchCondition[];
+             expected: { status: number; body?: unknown; headers?: Record<string,string> };
+             request: RequestDraft }
+ProjectVM  { slug: string; name: string; basePath?: string; endpoints: EndpointVM[]; caseCount: number }
+// @/src/viewer/curl
+RequestDraft { method: string; url: string; headers: Record<string,string>; body?: string; curl: string; notes: string[] }
+MatchCondition  // discriminated: has one of jsonPath|header|query + one of equals|notEquals|contains|regex|exists
+// @/src/viewer/verdict  (frozen)
+Verdict = {kind:"hit";caseId} | {kind:"divert";landedOn} | {kind:"nomatch"} | {kind:"unknown"}
+classifyResult(headers: Headers, status: number, bodyText: string, selected: {id: string; expected: {status:number; body?:unknown}}): Verdict
+// @/app/_lib/format
+prettyBody(text): string            // JSON.parse->stringify(...,2), passthrough on throw
+renderCurl(curl: string): string    // replaces "$ORIGIN" with window.location.origin (or "$ORIGIN" on server)
+parseHeaderLines(text): Record<string,string>   // "K: V\n" -> {k:"v"} (keys lowercased)
+verdictText(v: Verdict): { text: string; kind: "hit"|"divert"|"nomatch"|"unknown" }
+// @/app/_lib/status
+statusKind(status: number): "2" | "4" | "5" | "x"
+// @/app/_lib/endpoint-label
+commandCode(path: string): string   // "/acropolis-card-mgmt/GET_CARD/v1" -> "GET_CARD"
+// @/app/_lib/mock-url
+mockPath(slug, basePath?): string           // "/m/<slug><basePath>" — SSR-stable, use for DISPLAY
+mockBaseUrl(slug, basePath?, origin?): string // absolute — use inside CopyButton `text={() => ...}` only
+```
+
+### Salvage — the old `execute()` (from deleted `app/_explorer/Runner.tsx`, recover via `git show 8ad6ab2~N` or the copy below). Lift VERBATIM into `RequestBuilder`:
+
+```ts
+async function execute() {
+  setBusy(true); setError(null); setResult(null);
+  const noBody = ["GET", "HEAD"].includes(method) || body.trim() === "";
+  const started = performance.now();
+  try {
+    const res = await fetch(url, { method, headers: parseHeaderLines(headersText), body: noBody ? undefined : body });
+    const ms = Math.round(performance.now() - started);
+    const bodyText = await res.text();
+    setResult({
+      status: res.status, ms, headers: [...res.headers.entries()], bodyText,
+      verdict: classifyResult(res.headers, res.status, bodyText, { id: case_.id, expected: case_.expected }),
+    });
+    onExecuted?.();
+  } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  finally { setBusy(false); }
+}
+```
+
+Old `reset()` behaviour: restore `method/url/headersText/body` from `case_.request`, clear result + error. Old headers seed: `Object.entries(draft.headers).map(([k,v]) => `${k}: ${v}`).join("\n")`. Old body seed: `draft.body ?? ""`.
+
+### Conventions (unchanged from Phase 1)
+- No `import React`. Component tests `*.test.tsx` + `@testing-library/react` + `afterEach(() => cleanup())`. Mock `next/navigation` per-test. No hardcoded hex (tokens in `app/tokens.css`). No `git add -A`. Node v26 default (>=20 OK). Commit trailer `Claude-Session: https://claude.ai/code/session_01MuK2fgcpXNhze3JYKrBSo5`.
+- Each feature dir gets its own `*.module.css`. Reuse `app/_ui` primitives (`Tabs`, `Button`, `Badge`, `Dropdown`, `Tooltip`, `MethodPill`, `StatusCode`, `JsonView`, `CopyButton`, `EmptyState`).
+- When a task ships a route that the Sidebar marks `soon`, DROP that `soon` flag + its `TODO` comment in `app/_shell/Sidebar.tsx` (and adjust `shell.test.tsx`).
+
+---
+
+### P2.0: Rebrand MOCKSERVERS → Mirage (UI only)
+
+**Files:** `app/_shell/TopBar.tsx`, `app/layout.tsx` (metadata), grep for any other user-facing `MOCKSERVERS`/`mockservers` display string (NOT `package.json` name, NOT the `mockservers.dailyuze.com` host, NOT `/m/` routes, NOT repo config).
+**Test:** `app/_shell/shell.test.tsx` (or a small addition) — TopBar renders the text "Mirage".
+
+- [ ] Grep `grep -rn "MOCKSERVERS\|Mockservers" app/ --include=*.tsx` — the wordmark in `TopBar.tsx`, the `<title>`/metadata in `app/layout.tsx` ("mockservers" → "Mirage").
+- [ ] Change the wordmark text to `Mirage` (keep the cube glyph, keep Inter 800). `metadata.title = "Mirage"`, `metadata.description` may stay factual.
+- [ ] Do NOT touch: `package.json` `"name"`, `README.md`, `mocks/**`, the `mockservers.dailyuze.com` strings in `mock-url.ts` display (those are the deploy host — still correct), `docs/`.
+- [ ] `npm run check` + `npm run build` green. Commit `feat(brand): rename UI wordmark to Mirage`.
+
+---
+
+### P2.1: Project layout — Breadcrumbs + active-endpoint context
+
+**Files:** modify `app/(app)/p/[slug]/layout.tsx`; create `app/(app)/p/[slug]/project.module.css` if needed.
+**Interfaces:** consumes `useProject` (already), `Breadcrumbs` from `@/app/_shell/Breadcrumbs`, `usePathname`.
+**Produces:** the project layout renders `<Breadcrumbs>` above `{children}` — items derived from pathname: `[{label: project.name, href: /p/<slug>}, {label: <segment label>}]` where segment label maps `endpoints→Endpoints`, `cases→Cases`, etc., last crumb hrefless. Keeps the existing `notFound()` on unknown slug.
+
+- [ ] Test (`app/(app)/p/[slug]/layout.test.tsx`): mock `next/navigation` `usePathname → "/p/card-block-lost/cases"`, render layout with a ViewModelProvider fixture → breadcrumb shows "Card Block" then "Cases"; unknown slug still triggers `notFound` (assert `notFound` mock called).
+- [ ] Implement. `use(params)` for the Promise param (Next 15.5).
+- [ ] check + build green. Commit `feat(project): breadcrumbs in the project layout`.
+
+---
+
+### P2.2: Project Overview page (PAGE 02)
+
+**Files:** replace `app/(app)/p/[slug]/page.tsx` (currently the stub); create `app/_features/overview/ProjectStats.tsx`, `app/_features/overview/overview.module.css`; create `app/_features/traffic/sample-traffic.ts` (shared — Phase 4 reuses it).
+**Interfaces:**
+- `sample-traffic.ts`: `export interface TrafficEntry { id: string; method: string; endpointKey: string; path: string; status: number; at: string; ms: number; reqHeaders: Record<string,string>; reqBody: string; resBody: string }` and `export function sampleTraffic(project: ProjectVM): TrafficEntry[]` — deterministic ~12-row list derived from the project's real endpoints/cases (method+path from `EndpointVM`, status from a case's `expected.status`). NO `Math.random`, NO `Date.now` — hardcode `at` strings like `"10:42:31"`.
+- `ProjectStats`: `{ project: ProjectVM }` → a 4-cell strip: `{project.endpoints.length}` Endpoints, `{project.caseCount}` Cases, then "Requests" and "Success" each rendered as `—` (em-dash) with a `<PreviewBadge/>` on the group header (never a fabricated number — source spec §37).
+- Page: `<PageHeader title={project.name} description={project.summary or a short factual line} actions={<CopyButton text={() => mockBaseUrl(slug, project.basePath)} label="Copy base URL"/>}/>`; a "Running · CORS" status line showing `mockPath(slug, project.basePath)` (mono, SSR-stable); `<ProjectStats/>`; a "Recent traffic" section = first 5 of `sampleTraffic(project)` in a small table (`MethodPill`, path, `StatusCode`, ms) under a `<PreviewBadge/>`.
+
+- [ ] Test (`app/_features/overview/overview.test.tsx`): fixture ProjectVM with 3 endpoints / caseCount 35 → renders "35" and "3"; renders at least one `PreviewBadge` ("Preview" text); renders a traffic row referencing a real endpoint path. `sample-traffic.test.ts` (node): every entry's `endpointKey` is one of `project.endpoints[].key`.
+- [ ] Implement.
+- [ ] check + build green. Commit `feat(overview): project overview page`.
+
+---
+
+### P2.3: Endpoints list + `/p/[slug]/endpoints` page (PAGE 03)
+
+**Files:** `app/_features/endpoints/EndpointList.tsx`, `EndpointRow.tsx`, `EndpointToolbar.tsx`, `endpoints.module.css`; `app/(app)/p/[slug]/endpoints/page.tsx`; modify `app/_shell/Sidebar.tsx` (drop `soon` on the project "Endpoints" item) + `shell.test.tsx`.
+**Interfaces:**
+- `EndpointRow`: `{ endpoint: EndpointVM; selected?: boolean; onSelect?: () => void }` → `<MethodPill method={endpoint.method}/>`, `commandCode(endpoint.path)` (mono, primary), `endpoint.summary ?? endpoint.path` (muted sub), right-aligned `{endpoint.cases.length} cases`. `role="option"`, `aria-selected`, `tabIndex={0}`, keyboard: Enter/Space select, ArrowUp/Down move focus+selection (salvage the exact handler from the old `_explorer/EndpointList.tsx` — recover via `git show 8ad6ab2~<N>:app/_explorer/EndpointList.tsx` or an earlier Phase-1 commit; it's `role="listbox"` parent + `children[j].focus()`).
+- `EndpointList`: `{ endpoints: EndpointVM[]; selectedKey?: string | null; onSelect?: (key: string) => void }` → `role="listbox"` of `EndpointRow`.
+- `EndpointToolbar`: `{ query, onQuery, method, onMethod, view, onView }` → search `<input>` (caller debounces), method filter `<Select>` (All + distinct methods), `<Tabs>` All | Grouped.
+- Page: `<PageHeader title="Endpoints" actions={<Tooltip label="Preview — add endpoints via the repo"><Button aria-disabled onClick={preventDefault}>New Endpoint</Button></Tooltip>}/>`, `EndpointToolbar` (search debounced 150ms via `useDebounced`, filter by `commandCode`/`path`/`summary` + method), `EndpointList`. Row click → `router.push(\`/p/<slug>/endpoints?e=<key>\`)` (the workspace view is wired in P2.8 — until then `?e=` just re-renders the list; that's fine).
+
+- [ ] Test (`endpoints.test.tsx`): fixture project → renders a row per endpoint with its case count; typing in search narrows the list (fake timers or waitFor); ArrowDown moves `aria-selected`. Page test: clicking a row calls `router.push` with `?e=<key>` (mock `useRouter`).
+- [ ] Implement + drop the Sidebar `soon` flag for project Endpoints + fix `shell.test.tsx` (it can now assert an active `<Link name="Endpoints">` again when pathname is `/p/<slug>/endpoints`).
+- [ ] check + build green. Commit `feat(endpoints): endpoints list page`.
+
+---
+
+### P2.4: Cases list + `/p/[slug]/cases` page (PAGE 05)
+
+**Files:** `app/_features/cases/CaseList.tsx`, `CaseRow.tsx`, `CaseDetail.tsx`, `cases.module.css`; `app/(app)/p/[slug]/cases/page.tsx`; modify `Sidebar.tsx` (drop `soon` on "Cases") + `shell.test.tsx`.
+**Interfaces:**
+- `matchSummary(match: MatchCondition[]): string` — small helper (put in `cases.module`'s dir or `@/app/_lib`): render `$.cardLast4 = "0001"` style, one per condition joined by `·`; `$.x`→`body.x`, `header:X`→`header.X`, `query:X`→`query.X`; ops `equals`→`=`, `notEquals`→`≠`, `contains`→`⊃`, `regex`→`~`, `exists:true`→`exists`, `exists:false`→`absent`. Empty match → "fallback (any request)".
+- `CaseRow`: `{ case_: CaseVM; selected?; onSelect? }` → status dot colored by `statusKind(case_.expected.status)` (CSS `data-kind`), `case_.label` (mono), `matchSummary(case_.match)` (muted), `<StatusCode code={case_.expected.status}/>`, an overflow `<Dropdown>` with items `Duplicate`/`Edit`/`Delete` all `disabled: true` (preview). `role="option"` + keyboard nav (salvage from old `_explorer/CaseList.tsx`).
+- `CaseList`: `{ cases: CaseVM[]; selectedId?; onSelect? }`, `role="listbox"`. `isOpenApiGenerated` cases get a muted/italic style.
+- `CaseDetail`: `{ case_: CaseVM }` → read-only: expected status, expected body (`<JsonView value={JSON.stringify(case_.expected.body, null, 2)}/>`), match conditions list. (Used in the workspace later; standalone here is fine.)
+- Page: `<PageHeader title="Cases" actions={<disabled New case + tooltip>}/>`, grouped by endpoint (`project.endpoints.map(e => <section><h3>{commandCode(e.path)}</h3><CaseList cases={e.cases}/>`); every case in the project rendered.
+
+- [ ] Test (`cases.test.tsx`): fixture project (2 endpoints, 5 cases total) → 5 `CaseRow`s render; a 404 case's dot has `data-kind="4"`; `matchSummary` test (node, `cases-match.test.ts` or inline) for the operator/target mapping incl. empty→fallback.
+- [ ] Implement + drop Sidebar `soon` for Cases + fix `shell.test.tsx`.
+- [ ] check + build green. Commit `feat(cases): cases page`.
+
+---
+
+### P2.5: BodyEditor + HeadersEditor
+
+**Files:** `app/_features/runner/BodyEditor.tsx`, `HeadersEditor.tsx`, `runner.module.css`.
+**Interfaces:**
+- `BodyEditor`: `{ value: string; onChange: (v: string) => void }` → a `<textarea>` (mono, `aria-label="Request body"`) with a line-number gutter, and a toolbar: `Format` button = `try { onChange(JSON.stringify(JSON.parse(value), null, 2)) } catch { setInvalid(true) }` — on parse failure it does NOT change the value and shows an inline `<span data-invalid>Invalid JSON</span>` marker (cleared on next edit); `Copy` (writes `value` to clipboard); `Reset` is the PARENT's job (not here). Invalid JSON never blocks anything downstream.
+- `HeadersEditor`: `{ value: string; onChange }` → `<textarea>` (`aria-label="Request headers"`), one `K: V` per line. Export nothing extra — parsing is done by `parseHeaderLines` at execute time.
+
+- [ ] Test (`runner.test.tsx` or `body-editor.test.tsx`): valid JSON + click Format → `onChange` called with pretty text; invalid JSON + Format → `onChange` NOT called, `[data-invalid]` present; typing clears the marker.
+- [ ] Implement.
+- [ ] check + build green. Commit `feat(runner): body + headers editors`.
+
+---
+
+### P2.6: RequestBuilder + RequestTabs + ResponseViewer + VerdictLine
+
+**Files:** `app/_features/runner/RequestBuilder.tsx`, `RequestTabs.tsx`, `ResponseViewer.tsx`, `VerdictLine.tsx`; extend `runner.module.css`.
+**Interfaces:**
+- `RequestBuilder`: `{ case_: CaseVM; onExecuted?: () => void }`. State seeded from `case_.request` (method, url, headersText, body) exactly as the old Runner. `RequestTabs` = `<Tabs>` Params | Headers | Auth | Body | Pre-request — Body renders `<BodyEditor>`, Headers renders `<HeadersEditor>`, the other 3 render a small "Preview — not wired" panel (`<PreviewBadge/>` + one line). Method/URL row: a `<Select>` (GET/POST/PUT/PATCH/DELETE) + a mono `<input>` for URL. `Execute` `<Button variant="primary">` runs the lifted `execute()` VERBATIM. `⌘↵` / `Ctrl↵` triggers Execute when focus is anywhere inside the RequestBuilder (keydown listener on the root div, not `document`). `Reset to case` button. `case_.request.notes` shown as warnings. On result, render `<ResponseViewer result={...}/>`; on error render an error line.
+- `RunResult` type (define in `RequestBuilder` or a shared `runner/types.ts`): `{ status: number; ms: number; headers: [string,string][]; bodyText: string; verdict: Verdict }`.
+- `ResponseViewer`: `{ result: RunResult }` → header row: `<StatusCode code={result.status}/>` + `{result.ms} ms` + `{new Blob([result.bodyText]).size} B`; a `Pretty | Raw` toggle; `<Tabs>` Body | Headers | Raw — Body = `<JsonView value={result.bodyText}/>` (Pretty) or `<pre>` (Raw), Headers = the `result.headers` list, Raw = `<pre>{result.bodyText}</pre>`. Then `<VerdictLine verdict={result.verdict}/>`.
+- `VerdictLine`: `{ verdict: Verdict }` → `const { text, kind } = verdictText(verdict)` → `<p data-kind={kind}>{text}</p>`; `runner.module.css` maps `[data-kind="hit"]{color:var(--success)}` `divert→var(--warning)` `nomatch→var(--error)` `unknown→var(--text-muted)`.
+
+- [ ] Tests: (a) `RequestBuilder` — mock `fetch` to return a 200 JSON body; click Execute → `ResponseViewer` shows "200" and the body; `onExecuted` called. (b) mock `fetch` to reject → error line shown, no crash. (c) `⌘↵` inside the builder triggers Execute (spy on fetch). (d) `ResponseViewer` size calc: `bodyText="abcd"` → "4 B". (e) `VerdictLine`: each verdict kind → expected `data-kind` + text (port the old `_explorer/trace.test.ts` verdict-text cases here as `verdict-line.test.tsx` or into `format.test.ts`).
+- [ ] Implement — `execute()` byte-for-byte from the salvage block; do not "improve" it.
+- [ ] check + build green. Commit `feat(runner): request builder + response viewer`.
+
+---
+
+### P2.7: CodeGenerator
+
+**Files:** `app/_features/runner/CodeGenerator.tsx`; extend `runner.module.css`.
+**Interfaces:** `{ draft: RequestDraft }` → `<Tabs>` cURL | Java | Python | JavaScript | Go. cURL tab = `<pre>{renderCurl(draft.curl)}</pre>` + `<CopyButton text={() => renderCurl(draft.curl)}/>` (function form — `renderCurl` reads `window.location.origin`, so resolve at click, not render; on the server/first render show the `$ORIGIN` form which is stable). Other 4 tabs = a `<PreviewBadge/>` + "Code generation for {lang} is coming soon." `⌘⇧C` / `Ctrl⇧C` anywhere in the workspace copies the cURL (wire in P2.8, or expose an imperative handle / callback here).
+
+> NOTE (review leftover): `renderCurl` uses `window.location.origin` — rendering `renderCurl(...)` directly in JSX causes an SSR/client mismatch like the P1 hotfix. Render the `$ORIGIN` placeholder string on first paint and swap after mount (`useState`+`useEffect`), OR just show `draft.curl` (with the literal `$ORIGIN`) in the `<pre>` and only resolve inside the CopyButton. Prefer the latter — simplest, honest, no mismatch.
+
+- [ ] Test (`code-generator.test.tsx`): cURL tab `<pre>` contains the command with `$ORIGIN` (or the resolved origin after mount — assert on the stable form); switching to "Java" shows the preview note; CopyButton present.
+- [ ] Implement.
+- [ ] check + build green. Commit `feat(runner): code generator (cURL real, others preview)`.
+
+---
+
+### P2.8: EndpointWorkspace (PAGE 04) + wire into the endpoints route
+
+**Files:** `app/_features/endpoints/EndpointWorkspace.tsx`, extend `endpoints.module.css`; modify `app/(app)/p/[slug]/endpoints/page.tsx`.
+**Interfaces:**
+- `EndpointWorkspace`: `{ project: ProjectVM }`. Reads `?e=` and `?c=` via `useSearchParams`; `selectedEndpoint = project.endpoints.find(e => e.key === e_param) ?? project.endpoints[0]`; `selectedCase = selectedEndpoint.cases.find(c => c.id === c_param) ?? null`. 3-column CSS grid `232px 288px 1fr`: col1 `<EndpointList>` (selecting → `router.replace` updating `?e=`, clearing `?c=`), col2 `<CaseList cases={selectedEndpoint.cases}>` (selecting → `?c=`), col3 = when a case is selected `<RequestBuilder case_={selectedCase}/>` + `<CodeGenerator draft={selectedCase.request}/>`, else an `<EmptyState>` "Pick a case". Under 960px the 3 columns collapse to a `<Tabs>` Endpoints | Cases | Request (CSS + a mobile `useMediaQuery`-ish check, or just CSS with the Tabs always rendered and columns `display:none` at breakpoint — keep it simple).
+- Page: `const e = useSearchParams().get("e")` → if `e` present render `<EndpointWorkspace project={project}/>`, else the P2.3 list. Keep `<PageHeader>` above both. `⌘⇧C` copies `selectedCase.request` cURL when a case is active.
+
+- [ ] Test (`endpoint-workspace.test.tsx`): mock `useSearchParams` → `?e=GET_CARD&c=locate-card-happy`; fixture project with that endpoint+case → col1 shows GET_CARD selected, col2 shows the case selected, col3 renders a `RequestBuilder` (assert the Execute button). Changing selection calls `router.replace`/`push` with the new query (mock `useRouter`). Page test: `?e=` absent → list renders; `?e=X` present → workspace renders.
+- [ ] Implement.
+- [ ] check + build green. Manual: `npm run dev`, open `/p/card-block-lost/endpoints`, pick GET_CARD → a case → Execute → real 200/404/500 from the live mock; Copy cURL works.
+- [ ] Commit `feat(endpoints): 3-column endpoint workspace`.
+
+---
+
+### Phase 2 exit criteria
+- `/p/<slug>` overview, `/p/<slug>/endpoints` (list + `?e=` workspace), `/p/<slug>/cases` all render real data.
+- The runner executes against the live `card-block-lost` mock for every endpoint; the verdict line classifies hit/divert/nomatch; Reset restores the case.
+- cURL copy produces the same command the old explorer did (resolved origin).
+- Sidebar `soon` flags dropped for project Endpoints + Cases; `/endpoints` (workspace-level) and `/traffic` still `soon` (Phase 3/4).
+- Deep links `?e=&c=` resolve and survive reload.
+- `npm run check` + `npm run build` green; UI wordmark reads "Mirage".
+- Final Phase 2 whole-branch review (opus) before Phase 3.
 
 ---
 
