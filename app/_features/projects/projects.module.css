@@ -1,0 +1,230 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.search {
+  flex: 1;
+  min-width: 200px;
+  height: 34px;
+  padding: 0 var(--space-3);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--accent);
+}
+
+.search::placeholder {
+  color: var(--text-muted);
+}
+
+.noMatch {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* grid view */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: var(--transition);
+}
+
+.card:hover {
+  border-color: var(--accent);
+  background: var(--surface-elevated);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.glyph {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.cardName {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.cardName:hover {
+  color: var(--accent);
+}
+
+.cardServer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.metaLabel {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.baseUrl {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.baseUrl:hover {
+  color: var(--accent);
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.stats b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.running {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.runningDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.updated {
+  color: var(--text-muted);
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.card:hover .cardActions,
+.card:focus-within .cardActions {
+  opacity: 1;
+}
+
+.openLink {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.arrow {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+/* list view */
+.list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--surface-elevated);
+}
+
+.rowName {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rowStats {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rowStats b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* empty state */
+.emptyWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.importHint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
