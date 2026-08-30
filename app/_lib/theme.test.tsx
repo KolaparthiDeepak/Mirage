@@ -1,7 +1,18 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTheme, setTheme, toggleTheme } from "./theme";
 
+beforeEach(() => {
+  const store = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+  });
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   try {
     document.documentElement.removeAttribute("data-theme");
   } catch {
@@ -23,6 +34,14 @@ describe("theme", () => {
     setTheme("paper");
     expect(getTheme()).toBe("paper");
     expect(document.documentElement.dataset.theme).toBe("paper");
+  });
+
+  it("persists the chosen theme to localStorage — both values", () => {
+    setTheme("obsidian");
+    expect(localStorage.getItem("mockservers-theme")).toBe("obsidian");
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    setTheme("paper");
+    expect(localStorage.getItem("mockservers-theme")).toBe("paper");
   });
 
   it("toggleTheme flips paper back to obsidian", () => {

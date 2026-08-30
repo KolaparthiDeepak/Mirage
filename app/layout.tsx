@@ -22,7 +22,7 @@ export const metadata = {
 };
 
 // Applied before first paint so there's no flash of the wrong theme.
-const themeScript = `try{var t=localStorage.getItem('mockservers-theme');if(t==='paper'){document.documentElement.dataset.theme='paper'}else if(!t&&window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches){document.documentElement.dataset.theme='paper'}}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem('mockservers-theme');if(t==='paper'){document.documentElement.dataset.theme='paper'}}catch(e){}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
