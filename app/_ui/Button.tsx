@@ -6,12 +6,13 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: "sm" | "md";
 };
 
-export function Button({ variant, size = "md", ...rest }: Props) {
+export function Button({ variant, size = "md", type, className, ...rest }: Props) {
   return (
     <button
+      type={type ?? "button"}
       data-variant={variant}
       data-size={size}
-      className={styles.btn}
+      className={className ? `${styles.btn} ${className}` : styles.btn}
       {...rest}
     />
   );

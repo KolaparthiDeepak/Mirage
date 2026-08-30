@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
+import { useToast } from "./Toast";
 
 export function CopyButton({
   text,
@@ -11,14 +12,20 @@ export function CopyButton({
 }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const toast = useToast();
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  function onClick() {
-    navigator.clipboard?.writeText(text);
-    setCopied(true);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 1200);
+  async function onClick() {
+    try {
+      if (!navigator.clipboard) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 1200);
+    } catch {
+      toast("Couldn't copy to clipboard");
+    }
   }
 
   return (

@@ -1,6 +1,6 @@
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { Button, MethodPill, StatusCode, Badge, CopyButton } from "./index";
+import { Button, MethodPill, StatusCode, Badge, CopyButton, ToastProvider } from "./index";
 
 afterEach(() => cleanup());
 
@@ -34,7 +34,36 @@ describe("ui primitives", () => {
   });
 
   it("CopyButton renders a button with the default label", () => {
-    render(<CopyButton text="hello" />);
+    render(
+      <ToastProvider>
+        <CopyButton text="hello" />
+      </ToastProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Copy" })).toBeDefined();
+  });
+
+  it("CopyButton flips to 'Copied' on a successful write", async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    render(
+      <ToastProvider>
+        <CopyButton text="hello" />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copied" })).toBeDefined());
+  });
+
+  it("CopyButton stays 'Copy' and toasts when the write rejects", async () => {
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    render(
+      <ToastProvider>
+        <CopyButton text="hello" />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(screen.getByText(/couldn't copy/i)).toBeDefined());
     expect(screen.getByRole("button", { name: "Copy" })).toBeDefined();
   });
 });
