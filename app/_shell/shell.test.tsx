@@ -45,9 +45,23 @@ describe("Sidebar", () => {
     expect(screen.getByText("Cases")).toBeDefined();
     // Overview has a real route
     expect(screen.getByRole("link", { name: "Overview" })).toBeDefined();
-    // Endpoints is `soon` in both groups -> text present but no link
-    expect(screen.getAllByText("Endpoints").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("link", { name: "Endpoints" })).toBeNull();
+    // Rules is still `soon` -> text present but no link
+    expect(screen.getByText("Rules")).toBeDefined();
+    expect(screen.queryByRole("link", { name: "Rules" })).toBeNull();
+  });
+
+  it("renders the project Endpoints item as the active link on its route", () => {
+    render(
+      <ViewModelProvider model={model as never}>
+        <Sidebar />
+      </ViewModelProvider>,
+    );
+    // pathname is /p/card-block-lost/endpoints -> project Endpoints is live + current
+    expect(
+      screen.getByRole("link", { name: "Endpoints", current: "page" }),
+    ).toBeDefined();
+    // the WORKSPACE-level Endpoints stays `soon` (Phase 3) -> both texts present
+    expect(screen.getAllByText("Endpoints").length).toBe(2);
   });
 });
 

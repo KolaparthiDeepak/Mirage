@@ -16,8 +16,7 @@ const WORKSPACE: NavItem[] = [
 function projectItems(slug: string): NavItem[] {
   return [
     { label: "Overview", href: `/p/${slug}` },
-    // TODO(phase-2): drop `soon` when /p/<slug>/endpoints lands
-    { label: "Endpoints", href: `/p/${slug}/endpoints`, soon: true },
+    { label: "Endpoints", href: `/p/${slug}/endpoints` },
     // TODO(phase-3): drop `soon` when /p/<slug>/cases lands
     { label: "Cases", href: `/p/${slug}/cases`, soon: true },
     // TODO(phase-3): drop `soon` when /p/<slug>/rules lands

@@ -1,0 +1,130 @@
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { useState } from "react";
+import type { EndpointVM } from "@/src/viewer/model";
+import { ViewModelProvider } from "@/app/_lib/view-model-context";
+import { EndpointList } from "./EndpointList";
+import EndpointsPage from "@/app/(app)/p/[slug]/endpoints/page";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/p/demo/endpoints",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+function ep(key: string, method: string, nCases: number, summary?: string): EndpointVM {
+  return {
+    key,
+    method,
+    path: `/demo/${key}/v1`,
+    runUrl: "",
+    summary,
+    cases: Array.from({ length: nCases }, (_, i) => ({
+      id: `${key}-${i}`,
+      label: "",
+      isOpenApiGenerated: false,
+      match: [],
+      expected: { status: 200 },
+      request: { method, url: "", headers: {}, curl: "", notes: [] },
+    })),
+  };
+}
+
+const endpoints = [
+  ep("GET_CARD", "GET", 3, "Fetch a card"),
+  ep("BLOCK_CARD", "POST", 1),
+  ep("UNBLOCK_CARD", "POST", 2),
+  ep("DELETE_CARD", "DELETE", 0),
+];
+
+const model = {
+  build: { commit: "x", builtAt: "", warnings: [] },
+  projects: [{ slug: "demo", name: "Demo", caseCount: 6, endpoints }],
+} as never;
+
+function resolvedParams(slug: string) {
+  const p = Promise.resolve({ slug }) as Promise<{ slug: string }> & {
+    status: string;
+    value: { slug: string };
+  };
+  p.status = "fulfilled";
+  p.value = { slug };
+  return p;
+}
+
+function ListHarness() {
+  const [sel, setSel] = useState<string | null>(null);
+  return <EndpointList endpoints={endpoints} selectedKey={sel} onSelect={setSel} />;
+}
+
+afterEach(() => {
+  cleanup();
+  push.mockClear();
+  vi.useRealTimers();
+});
+
+describe("EndpointList", () => {
+  it("renders a row per endpoint with its case count", () => {
+    render(<ListHarness />);
+    expect(screen.getAllByRole("option")).toHaveLength(4);
+    expect(screen.getByText("3 cases")).toBeDefined();
+    expect(screen.getByText("0 cases")).toBeDefined();
+  });
+
+  it("ArrowDown from the first row selects the second", () => {
+    render(<ListHarness />);
+    const rows = screen.getAllByRole("option");
+    fireEvent.keyDown(rows[0]!, { key: "ArrowDown" });
+    expect(rows[1]!.getAttribute("aria-selected")).toBe("true");
+    expect(rows[0]!.getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("Enter selects the focused row", () => {
+    render(<ListHarness />);
+    const rows = screen.getAllByRole("option");
+    fireEvent.keyDown(rows[2]!, { key: "Enter" });
+    expect(rows[2]!.getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("Endpoints page", () => {
+  const rows = () => within(screen.getByRole("listbox")).getAllByRole("option");
+
+  function renderPage() {
+    return render(
+      <ViewModelProvider model={model}>
+        <EndpointsPage params={resolvedParams("demo")} />
+      </ViewModelProvider>,
+    );
+  }
+
+  it("lists every endpoint and filters as you type (debounced)", async () => {
+    renderPage();
+    expect(rows()).toHaveLength(4);
+    fireEvent.change(screen.getByLabelText("Search endpoints"), {
+      target: { value: "block" },
+    });
+    await waitFor(() => expect(rows()).toHaveLength(2));
+  });
+
+  it("filters by method", async () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText("Filter by method"), {
+      target: { value: "DELETE" },
+    });
+    await waitFor(() => expect(rows()).toHaveLength(1));
+  });
+
+  it("pushes ?e=<key> when a row is clicked", () => {
+    renderPage();
+    fireEvent.click(screen.getByText("GET_CARD"));
+    expect(push).toHaveBeenCalledWith("/p/demo/endpoints?e=GET_CARD");
+  });
+
+  it("switching to Grouped renders group labels", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("tab", { name: "Grouped" }));
+    expect(screen.getByText("/demo")).toBeDefined();
+  });
+});
