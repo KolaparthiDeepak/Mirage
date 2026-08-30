@@ -1,6 +1,7 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
+import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { PreviewBadge } from "./PreviewBadge";
@@ -65,5 +66,16 @@ describe("PreviewBadge", () => {
   it("renders the text Preview", () => {
     render(<PreviewBadge />);
     expect(screen.getByText("Preview")).toBeDefined();
+  });
+});
+
+describe("TopBar", () => {
+  it("renders the wordmark text 'Mirage'", () => {
+    render(
+      <ViewModelProvider model={model as never}>
+        <TopBar />
+      </ViewModelProvider>,
+    );
+    expect(screen.getByText("Mirage")).toBeDefined();
   });
 });

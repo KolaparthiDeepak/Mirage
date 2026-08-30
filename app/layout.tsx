@@ -17,7 +17,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "MOCKSERVERS",
+  title: "Mirage",
   description: "Hosted, file-defined mock API server",
 };
 

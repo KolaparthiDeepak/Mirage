@@ -36,7 +36,7 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           <path d="M2 17l10 5 10-5" />
           <path d="M2 12l10 5 10-5" />
         </svg>
-        <span className={styles.wordmarkText}>MOCKSERVERS</span>
+        <span className={styles.wordmarkText}>Mirage</span>
       </Link>
 
       <div className={styles.topbarRight}>
