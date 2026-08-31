@@ -17,7 +17,7 @@ export interface PreviewState {
 }
 
 export const SEED_ENVIRONMENTS: Env[] = [
-  { id: "local", name: "Local", baseUrl: "http://localhost:3000" },
+  { id: "local", name: "Local", baseUrl: "" },
   { id: "dev", name: "Development", baseUrl: "https://dev.mockservers.dailyuze.com" },
   { id: "qa", name: "QA", baseUrl: "https://qa.mockservers.dailyuze.com" },
   { id: "prod", name: "Production", baseUrl: "https://mockservers.dailyuze.com" },

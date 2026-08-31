@@ -33,11 +33,11 @@ export function CodeGenerator({
   const [origin, setOrigin] = useState("$ORIGIN");
   useEffect(() => {
     setOrigin(
-      activeEnv.id !== "local"
+      activeEnv.baseUrl
         ? activeEnv.baseUrl.replace(/\/+$/, "")
         : window.location.origin,
     );
-  }, [activeEnv.id, activeEnv.baseUrl]);
+  }, [activeEnv.baseUrl]);
   const resolvedCurl = draft.curl.split("$ORIGIN").join(origin);
 
   const copyCurl = useCallback(async () => {

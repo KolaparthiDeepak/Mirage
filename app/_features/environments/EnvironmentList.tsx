@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePreview } from "@/app/_lib/preview-store";
 import { Badge, Button } from "@/app/_ui";
 import { AddEnvironmentModal } from "./AddEnvironmentModal";
@@ -8,6 +8,8 @@ import styles from "./environments.module.css";
 export function EnvironmentList() {
   const { state, set } = usePreview();
   const [adding, setAdding] = useState(false);
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
 
   return (
     <>
@@ -24,7 +26,9 @@ export function EnvironmentList() {
               onClick={() => set((s) => ({ ...s, activeEnvId: env.id }))}
             >
               <span className={styles.name}>{env.name}</span>
-              <span className={`${styles.url} ${styles.grow}`}>{env.baseUrl}</span>
+              <span className={`${styles.url} ${styles.grow}`}>
+                {env.baseUrl || origin || "(current origin)"}
+              </span>
               {active ? <Badge tone="success">Active</Badge> : null}
             </button>
           );

@@ -15,10 +15,10 @@ import styles from "./runner.module.css";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-// Local env = "whatever origin the dev server runs on" — keep the draft URL as-is
-// (relative). Only a non-local env rebases the URL onto its baseUrl.
-function seedUrl(url: string, env: { id: string; baseUrl: string }): string {
-  return env.id === "local" ? url : applyEnv(url, env);
+// An env with an empty baseUrl = "whatever origin the dev server runs on" — keep
+// the draft URL as-is (relative). A env with a baseUrl rebases the URL onto it.
+function seedUrl(url: string, env: { baseUrl: string }): string {
+  return env.baseUrl ? applyEnv(url, env) : url;
 }
 
 function seedHeaders(headers: Record<string, string>): string {
@@ -120,7 +120,7 @@ export function RequestBuilder({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
-        {activeEnv.id !== "local" && (
+        {activeEnv.baseUrl && (
           <Badge tone="warning">env: {activeEnv.name}</Badge>
         )}
         <Button variant="primary" onClick={execute} disabled={busy}>
