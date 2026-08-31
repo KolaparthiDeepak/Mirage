@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Drawer, useToast } from "@/app/_ui";
+import { Drawer } from "@/app/_ui";
 import { useShortcuts } from "@/app/_lib/shortcuts";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
@@ -12,7 +12,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
-  const toast = useToast();
 
   useEffect(() => {
     setNavOpen(false);
@@ -23,18 +22,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const closePalette = useCallback(() => setPaletteOpen(false), []);
 
   // mod+enter (execute) and mod+shift+c (copy cURL) are handled locally in RequestBuilder / EndpointWorkspace.
+  // mod+p / mod+s / mod+e are intentionally NOT mapped — an unmapped combo falls through to the
+  // browser (Print / Save), which beats hijacking it for a "preview" toast that does nothing.
   const shortcutMap = useMemo(
     () => ({
       "mod+k": () => setPaletteOpen((o) => !o),
-      "mod+p": openPalette, // opens the palette (Switch project lives there); acceptable
-      "mod+e": () => toast("Preview — add endpoints via the repo"),
-      "mod+s": () => toast("Preview — cases are defined in the repo"),
       esc: () => {
         setNavOpen(false);
         setPaletteOpen(false);
       },
     }),
-    [toast, openPalette],
+    [],
   );
   useShortcuts(shortcutMap);
 

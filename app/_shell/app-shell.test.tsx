@@ -77,6 +77,16 @@ describe("AppShell", () => {
     expect(main.getAttribute("tabindex")).toBe("-1");
   });
 
+  it("does not hijack ⌘P / ⌘S / ⌘E — they pass through to the browser", () => {
+    renderShell();
+    for (const key of ["p", "s", "e"]) {
+      // fireEvent returns false when a listener called preventDefault
+      const notPrevented = fireEvent.keyDown(window, { key, metaKey: true });
+      expect(notPrevented).toBe(true);
+    }
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("⌘K toggles the palette closed again", () => {
     renderShell();
 
