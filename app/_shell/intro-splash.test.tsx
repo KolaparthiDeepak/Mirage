@@ -1,5 +1,5 @@
 import { render, cleanup } from "@testing-library/react";
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { IntroSplash } from "./IntroSplash";
 
 function mockMatchMedia(matches: boolean) {
@@ -15,13 +15,6 @@ function mockMatchMedia(matches: boolean) {
   }));
 }
 
-beforeEach(() => {
-  try {
-    sessionStorage.clear();
-  } catch {
-    /* noop */
-  }
-});
 
 afterEach(() => {
   cleanup();
@@ -29,26 +22,27 @@ afterEach(() => {
 });
 
 describe("IntroSplash", () => {
-  it("shows the overlay once on a fresh session and records the seen flag", () => {
+  it("renders the overlay with canvas when motion is allowed", () => {
     mockMatchMedia(false);
     render(<IntroSplash />);
     expect(document.querySelector("[data-intro]")).not.toBeNull();
     expect(document.querySelector("canvas")).not.toBeNull();
-    expect(sessionStorage.getItem("mirage-intro-seen")).toBe("1");
   });
 
-  it("renders nothing when the intro was already seen this session", () => {
-    mockMatchMedia(false);
-    sessionStorage.setItem("mirage-intro-seen", "1");
+  it("renders nothing under reduced motion", () => {
+    mockMatchMedia(true);
     const { container } = render(<IntroSplash />);
     expect(container.firstChild).toBeNull();
     expect(document.querySelector("[data-intro]")).toBeNull();
   });
 
-  it("skips the animation but still sets the seen flag under reduced motion", () => {
-    mockMatchMedia(true);
+  it("replays the intro on each render when motion is allowed", () => {
+    mockMatchMedia(false);
+    const { unmount } = render(<IntroSplash />);
+    expect(document.querySelector("[data-intro]")).not.toBeNull();
+    unmount();
+    cleanup();
     render(<IntroSplash />);
-    expect(document.querySelector("[data-intro]")).toBeNull();
-    expect(sessionStorage.getItem("mirage-intro-seen")).toBe("1");
+    expect(document.querySelector("[data-intro]")).not.toBeNull();
   });
 });

@@ -2,7 +2,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styles from "./intro-splash.module.css";
 
-const SEEN_KEY = "mirage-intro-seen";
 // Timeline (ms): 0-500 fade-in + drift, 500-2200 ease to target,
 // 2200-2800 settle + glow pulse, 2800-3200 hold, then 400ms overlay fade.
 const TOTAL_MS = 3200;
@@ -26,18 +25,6 @@ export function IntroSplash() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useLayoutEffect(() => {
-    let seen = false;
-    try {
-      seen = sessionStorage.getItem(SEEN_KEY) === "1";
-    } catch {
-      /* storage disabled — treat as unseen */
-    }
-    if (seen) return;
-    try {
-      sessionStorage.setItem(SEEN_KEY, "1");
-    } catch {
-      /* storage disabled — intro still plays once this mount */
-    }
     let reduced = false;
     try {
       reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
