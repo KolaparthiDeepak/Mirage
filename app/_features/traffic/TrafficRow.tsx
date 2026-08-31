@@ -4,9 +4,15 @@ import { commandCode } from "@/app/_lib/endpoint-label";
 import type { TrafficEntry } from "./sample-traffic";
 import styles from "./traffic.module.css";
 
-type Props = { entry: TrafficEntry; selected?: boolean; onSelect?: () => void };
+type Props = {
+  entry: TrafficEntry;
+  selected?: boolean;
+  /** Roving-tabindex: true makes this the table's tab stop. Defaults to `selected`. */
+  tabbable?: boolean;
+  onSelect?: () => void;
+};
 
-export function TrafficRow({ entry, selected, onSelect }: Props) {
+export function TrafficRow({ entry, selected, tabbable = selected, onSelect }: Props) {
   function onKeyDown(e: KeyboardEvent<HTMLTableRowElement>) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -17,7 +23,7 @@ export function TrafficRow({ entry, selected, onSelect }: Props) {
   return (
     <tr
       className={styles.row}
-      tabIndex={0}
+      tabIndex={tabbable ? 0 : -1}
       aria-current={selected ? "true" : undefined}
       data-selected={selected || undefined}
       onClick={onSelect}

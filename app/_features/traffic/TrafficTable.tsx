@@ -1,3 +1,5 @@
+"use client";
+import type { KeyboardEvent } from "react";
 import { EmptyState } from "@/app/_ui";
 import type { TrafficEntry } from "./sample-traffic";
 import { TrafficRow } from "./TrafficRow";
@@ -14,6 +16,20 @@ export function TrafficTable({ entries, selectedId, onSelect }: Props) {
     return <EmptyState title="No traffic" body="Sample log is empty." />;
   }
 
+  // ArrowUp/Down select the sibling row and move focus (roving tabindex).
+  function onKeyDown(ev: KeyboardEvent<HTMLTableSectionElement>) {
+    if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+    const rows = Array.from(ev.currentTarget.children) as HTMLElement[];
+    const i = rows.indexOf(ev.target as HTMLElement);
+    if (i === -1) return;
+    ev.preventDefault();
+    const j = i + (ev.key === "ArrowDown" ? 1 : -1);
+    const next = entries[j];
+    if (!next) return;
+    onSelect?.(next.id);
+    rows[j]?.focus();
+  }
+
   return (
     <div className={styles.scroll} style={{ overflowX: "auto" }}>
       <table className={styles.table}>
@@ -26,12 +42,13 @@ export function TrafficTable({ entries, selectedId, onSelect }: Props) {
             <th scope="col">Duration</th>
           </tr>
         </thead>
-        <tbody>
-          {entries.map((entry) => (
+        <tbody onKeyDown={onKeyDown}>
+          {entries.map((entry, i) => (
             <TrafficRow
               key={entry.id}
               entry={entry}
               selected={entry.id === selectedId}
+              tabbable={entry.id === selectedId || (selectedId == null && i === 0)}
               onSelect={() => onSelect?.(entry.id)}
             />
           ))}

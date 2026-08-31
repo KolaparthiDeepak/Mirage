@@ -9,10 +9,13 @@ import styles from "./cases.module.css";
 export function CaseRow({
   case_,
   selected,
+  tabbable = selected,
   onSelect,
 }: {
   case_: CaseVM;
   selected?: boolean;
+  /** Roving-tabindex: true makes this the list's tab stop. Defaults to `selected`. */
+  tabbable?: boolean;
   onSelect?: () => void;
 }) {
   function onKeyDown(ev: KeyboardEvent<HTMLDivElement>) {
@@ -27,7 +30,7 @@ export function CaseRow({
   return (
     <div
       role="option"
-      tabIndex={selected ? 0 : -1}
+      tabIndex={tabbable ? 0 : -1}
       aria-selected={!!selected}
       className={case_.isOpenApiGenerated ? `${styles.row} ${styles.rowGenerated}` : styles.row}
       onClick={() => onSelect?.()}

@@ -91,6 +91,13 @@ describe("TrafficTable", () => {
     expect(onSelect).toHaveBeenCalledWith("e1");
   });
 
+  it("makes the first body row tabbable when nothing is selected (roving fallback)", () => {
+    render(<TrafficTable entries={entries} />);
+    const rows = screen.getAllByRole("row").slice(1); // drop the header row
+    expect(rows[0]!.getAttribute("tabindex")).toBe("0");
+    expect(rows[1]!.getAttribute("tabindex")).toBe("-1");
+  });
+
   it("shows an empty state with no entries", () => {
     render(<TrafficTable entries={[]} />);
     expect(screen.getByText("No traffic")).toBeDefined();

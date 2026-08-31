@@ -29,11 +29,12 @@ export function EndpointList({
 
   return (
     <div role="listbox" aria-label="Endpoints" className={styles.list} onKeyDown={onKeyDown}>
-      {endpoints.map((e) => (
+      {endpoints.map((e, i) => (
         <EndpointRow
           key={e.key}
           endpoint={e}
           selected={e.key === selectedKey}
+          tabbable={e.key === selectedKey || (selectedKey == null && i === 0)}
           onSelect={() => onSelect?.(e.key)}
         />
       ))}

@@ -135,6 +135,13 @@ describe("CaseList keyboard nav", () => {
     return <CaseList cases={ep1.cases} selectedId={sel} onSelect={setSel} />;
   }
 
+  it("makes the first row tabbable when nothing is selected (roving fallback)", () => {
+    render(<Harness />);
+    const rows = screen.getAllByRole("option");
+    expect(rows[0]!.getAttribute("tabindex")).toBe("0");
+    expect(rows[1]!.getAttribute("tabindex")).toBe("-1");
+  });
+
   it("ArrowDown from the first row moves aria-selected", () => {
     render(<Harness />);
     const rows = screen.getAllByRole("option");

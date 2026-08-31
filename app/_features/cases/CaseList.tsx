@@ -29,11 +29,12 @@ export function CaseList({
 
   return (
     <div role="listbox" aria-label="Cases" className={styles.list} onKeyDown={onKeyDown}>
-      {cases.map((c) => (
+      {cases.map((c, i) => (
         <CaseRow
           key={c.id}
           case_={c}
           selected={c.id === selectedId}
+          tabbable={c.id === selectedId || (selectedId == null && i === 0)}
           onSelect={() => onSelect?.(c.id)}
         />
       ))}

@@ -75,6 +75,13 @@ describe("EndpointList", () => {
     expect(screen.getByText("0 cases")).toBeDefined();
   });
 
+  it("makes the first row tabbable when nothing is selected (roving fallback)", () => {
+    render(<ListHarness />);
+    const rows = screen.getAllByRole("option");
+    expect(rows[0]!.getAttribute("tabindex")).toBe("0");
+    expect(rows[1]!.getAttribute("tabindex")).toBe("-1");
+  });
+
   it("ArrowDown from the first row selects the second", () => {
     render(<ListHarness />);
     const rows = screen.getAllByRole("option");
