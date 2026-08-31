@@ -68,7 +68,10 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         <EndpointList
           endpoints={project.endpoints}
           selectedKey={selectedEndpoint.key}
-          onSelect={(key) => setParams({ e: key, c: null })}
+          onSelect={(key) => {
+            setParams({ e: key, c: null });
+            setMobileTab("cases");
+          }}
         />
       </div>
 
@@ -79,7 +82,10 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         <CaseList
           cases={selectedEndpoint.cases}
           selectedId={selectedCase?.id ?? null}
-          onSelect={(id) => setParams({ e: selectedEndpoint.key, c: id })}
+          onSelect={(id) => {
+            setParams({ e: selectedEndpoint.key, c: id });
+            setMobileTab("request");
+          }}
         />
       </div>
 
