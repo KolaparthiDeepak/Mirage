@@ -4,52 +4,39 @@ import { sampleTraffic } from "./sample-traffic";
 
 const draft = { method: "GET", url: "", headers: {}, curl: "", notes: [] };
 
+function mkEndpoint(n: number) {
+  return {
+    key: `EP_${n}`,
+    method: n % 2 === 0 ? "GET" : "POST",
+    path: `/x/EP_${n}/v1`,
+    runUrl: "",
+    cases: [
+      {
+        id: `c${n}a`,
+        label: "",
+        isOpenApiGenerated: false,
+        match: [],
+        expected: { status: 200, body: { ok: true, n } },
+        request: { ...draft, body: `{"n":${n}}` },
+      },
+      {
+        id: `c${n}b`,
+        label: "",
+        isOpenApiGenerated: false,
+        match: [],
+        expected: { status: 404 },
+        request: draft,
+      },
+    ],
+  };
+}
+
+// 20 endpoints -> more than the old cap of 12, still under the new cap of 30.
 const project = {
   slug: "p",
   name: "P",
-  endpoints: [
-    {
-      key: "GET_CARD",
-      method: "GET",
-      path: "/x/GET_CARD/v1",
-      runUrl: "",
-      cases: [
-        {
-          id: "c1",
-          label: "",
-          isOpenApiGenerated: false,
-          match: [],
-          expected: { status: 200, body: { ok: true } },
-          request: draft,
-        },
-        {
-          id: "c2",
-          label: "",
-          isOpenApiGenerated: false,
-          match: [],
-          expected: { status: 404 },
-          request: draft,
-        },
-      ],
-    },
-    {
-      key: "POST_CARD",
-      method: "POST",
-      path: "/x/POST_CARD/v1",
-      runUrl: "",
-      cases: [
-        {
-          id: "c3",
-          label: "",
-          isOpenApiGenerated: false,
-          match: [],
-          expected: { status: 201 },
-          request: draft,
-        },
-      ],
-    },
-  ],
-  caseCount: 3,
+  endpoints: Array.from({ length: 20 }, (_, i) => mkEndpoint(i)),
+  caseCount: 40,
 } as unknown as ProjectVM;
 
 describe("sampleTraffic", () => {
@@ -72,7 +59,17 @@ describe("sampleTraffic", () => {
     expect(sampleTraffic(project)).toEqual(sampleTraffic(project));
   });
 
-  it("caps at ~12 entries", () => {
-    expect(sampleTraffic(project).length).toBeLessThanOrEqual(12);
+  it("returns more than 12 and at most 30 entries", () => {
+    const n = sampleTraffic(project).length;
+    expect(n).toBeGreaterThan(12);
+    expect(n).toBeLessThanOrEqual(30);
+  });
+
+  it("carries a JSON content-type header and string bodies", () => {
+    for (const e of sampleTraffic(project)) {
+      expect(e.reqHeaders["content-type"]).toBe("application/json");
+      expect(typeof e.reqBody).toBe("string");
+      expect(typeof e.resBody).toBe("string");
+    }
   });
 });

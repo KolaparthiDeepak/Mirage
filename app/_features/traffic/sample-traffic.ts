@@ -27,9 +27,29 @@ const AT = [
   "10:34:19",
   "10:33:02",
   "10:31:40",
+  "10:30:55",
+  "10:29:11",
+  "10:28:37",
+  "10:27:02",
+  "10:25:44",
+  "10:24:19",
+  "10:23:05",
+  "10:21:52",
+  "10:20:38",
+  "10:18:47",
+  "10:17:23",
+  "10:15:09",
+  "10:13:41",
+  "10:11:58",
+  "10:09:32",
+  "10:07:16",
+  "10:04:03",
+  "10:01:29",
 ];
 
-const MAX = 12;
+const MS = [8, 12, 18, 24, 31, 42, 9, 15];
+
+const MAX = 30;
 
 /** Deterministic sample request log derived from a project's real endpoints/cases.
  *  Preview-only data — the mock backend does not record traffic. */
@@ -40,9 +60,8 @@ export function sampleTraffic(project: ProjectVM): TrafficEntry[] {
     const cases = endpoint.cases ?? [];
     const perEndpoint = cases.length > 1 ? 2 : 1;
     for (let i = 0; i < perEndpoint && out.length < MAX; i++) {
-      const c = cases[i % cases.length]; // undefined when the endpoint has no cases
+      const c = cases.length > 0 ? cases[i % cases.length] : undefined;
       const status = c?.expected.status ?? 200;
-      const body = JSON.stringify(c?.expected.body ?? {});
       const idx = out.length;
       out.push({
         id: `${endpoint.key}-${i}`,
@@ -51,10 +70,10 @@ export function sampleTraffic(project: ProjectVM): TrafficEntry[] {
         path: endpoint.path,
         status,
         at: AT[idx % AT.length]!,
-        ms: 8 + (idx % 6) * 5,
-        reqHeaders: c?.request.headers ?? {},
-        reqBody: body,
-        resBody: body,
+        ms: MS[idx % MS.length]!,
+        reqHeaders: { "content-type": "application/json" },
+        reqBody: endpoint.cases[i]?.request?.body ?? "{}",
+        resBody: JSON.stringify(c?.expected.body ?? {}),
       });
     }
   }

@@ -9,8 +9,7 @@ const WORKSPACE: NavItem[] = [
   { label: "Projects", href: "/projects" },
   // TODO(phase-2): drop `soon` when /endpoints lands
   { label: "Endpoints", href: "/endpoints", soon: true },
-  // TODO(phase-5): drop `soon` when /traffic lands
-  { label: "Traffic", href: "/traffic", soon: true },
+  { label: "Traffic", href: "/traffic" },
 ];
 
 function projectItems(slug: string): NavItem[] {

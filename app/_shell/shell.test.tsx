@@ -48,6 +48,8 @@ describe("Sidebar", () => {
     // Rules is still `soon` -> text present but no link
     expect(screen.getByText("Rules")).toBeDefined();
     expect(screen.queryByRole("link", { name: "Rules" })).toBeNull();
+    // workspace Traffic is live now (Phase 4)
+    expect(screen.getByRole("link", { name: "Traffic" })).toBeDefined();
   });
 
   it("renders the project Endpoints item as the active link on its route", () => {

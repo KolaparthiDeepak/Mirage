@@ -1,0 +1,104 @@
+.scroll {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table thead th {
+  text-align: left;
+  padding: var(--space-2) var(--space-4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.row {
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.row td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.row:last-child td {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--surface);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.row[data-selected] {
+  background: var(--surface-elevated);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.drawerHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.drawerMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionHead {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}

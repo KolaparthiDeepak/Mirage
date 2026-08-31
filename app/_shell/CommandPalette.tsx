@@ -69,12 +69,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         preview: true,
         run: () => toast("Preview — the cross-project endpoints page is coming soon"),
       },
-      {
-        id: "go-traffic",
-        label: "Go to Traffic",
-        preview: true,
-        run: () => toast("Preview — traffic is coming soon"),
-      },
+      { id: "go-traffic", label: "Go to Traffic", run: () => router.push("/traffic") },
     ];
 
     if (project) {

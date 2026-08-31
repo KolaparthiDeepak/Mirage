@@ -78,6 +78,14 @@ describe("CommandPalette", () => {
     expect(within(newEp).getByText("Preview")).toBeDefined();
   });
 
+  it("'Go to Traffic' navigates to /traffic and is not a preview row", () => {
+    setup();
+    const row = screen.getByText("Go to Traffic").closest("button") as HTMLButtonElement;
+    expect(within(row).queryByText("Preview")).toBeNull();
+    fireEvent.click(row);
+    expect(push).toHaveBeenCalledWith("/traffic");
+  });
+
   it("runs the highlighted command on ArrowDown + Enter", () => {
     setup();
     const input = screen.getByLabelText("Command or search");
