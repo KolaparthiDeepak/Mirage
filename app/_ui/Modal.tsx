@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import styles from "./ui.module.css";
 
 type Props = {
@@ -7,6 +7,8 @@ type Props = {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Focused instead of the panel when the modal opens (e.g. a search input). */
+  initialFocusRef?: RefObject<HTMLElement | null>;
 };
 
 function focusables(root: HTMLElement) {
@@ -17,12 +19,13 @@ function focusables(root: HTMLElement) {
   );
 }
 
-export function Modal({ open, onClose, title, children }: Props) {
+export function Modal({ open, onClose, title, children, initialFocusRef }: Props) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    panel.current?.focus();
+    const restoreTo = document.activeElement as HTMLElement | null;
+    (initialFocusRef?.current ?? panel.current)?.focus();
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         onClose();
@@ -49,8 +52,11 @@ export function Modal({ open, onClose, title, children }: Props) {
       }
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (restoreTo?.isConnected) restoreTo.focus();
+    };
+  }, [open, onClose, initialFocusRef]);
 
   return (
     <div
