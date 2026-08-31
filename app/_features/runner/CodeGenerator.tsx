@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
-import { CopyButton, Tabs } from "@/app/_ui";
+import { Button, Tabs, useToast } from "@/app/_ui";
+import { copyToClipboard } from "@/app/_lib/clipboard";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import type { RequestDraft } from "@/src/viewer/curl";
 import styles from "./runner.module.css";
@@ -22,6 +23,7 @@ export function CodeGenerator({
   copyCurlRef?: MutableRefObject<(() => void) | null>;
 }) {
   const [active, setActive] = useState("curl");
+  const toast = useToast();
 
   // $ORIGIN resolves after mount so SSR and first client paint both emit the
   // literal placeholder (hydration-safe); the block corrects itself next paint.
@@ -29,16 +31,20 @@ export function CodeGenerator({
   useEffect(() => setOrigin(window.location.origin), []);
   const resolvedCurl = draft.curl.split("$ORIGIN").join(origin);
 
+  const copyCurl = useCallback(async () => {
+    toast((await copyToClipboard(resolvedCurl)) ? "cURL copied" : "Couldn't copy to clipboard");
+  }, [resolvedCurl, toast]);
+
   // Imperative handle for the ⌘⇧C shortcut wired in P2.8.
   useEffect(() => {
     if (!copyCurlRef) return;
     copyCurlRef.current = () => {
-      navigator.clipboard?.writeText(resolvedCurl).catch(() => {});
+      void copyCurl();
     };
     return () => {
       copyCurlRef.current = null;
     };
-  }, [copyCurlRef, resolvedCurl]);
+  }, [copyCurlRef, copyCurl]);
 
   const label = TABS.find((t) => t.id === active)?.label ?? "";
 
@@ -48,7 +54,9 @@ export function CodeGenerator({
       {active === "curl" ? (
         <div className={styles.codeRow}>
           <pre className={styles.codeBlock}>{resolvedCurl}</pre>
-          <CopyButton text={() => resolvedCurl} />
+          <Button variant="ghost" size="sm" onClick={copyCurl}>
+            Copy
+          </Button>
         </div>
       ) : (
         <div className={styles.soon}>
