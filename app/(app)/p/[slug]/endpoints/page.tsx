@@ -5,11 +5,12 @@ import type { EndpointVM } from "@/src/viewer/model";
 import { useProject } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { Button, Tooltip, EmptyState } from "@/app/_ui";
+import { Button, EmptyState } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { EndpointToolbar } from "@/app/_features/endpoints/EndpointToolbar";
 import { EndpointList } from "@/app/_features/endpoints/EndpointList";
 import { EndpointWorkspace } from "@/app/_features/endpoints/EndpointWorkspace";
+import { CreateEndpointModal } from "@/app/_features/endpoints/CreateEndpointModal";
 import styles from "@/app/_features/endpoints/endpoints.module.css";
 
 function groupPrefix(path: string): string {
@@ -27,6 +28,7 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
   const [query, setQuery] = useState("");
   const [method, setMethod] = useState("all");
   const [view, setView] = useState<"all" | "grouped">("all");
+  const [createOpen, setCreateOpen] = useState(false);
   const q = useDebounced(query, 150).trim().toLowerCase();
 
   const methods = useMemo(
@@ -67,12 +69,14 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
       <PageHeader
         title="Endpoints"
         actions={
-          <Tooltip label="Preview — add endpoints via the repo">
-            <Button variant="secondary" aria-disabled onClick={(e) => e.preventDefault()}>
-              New Endpoint
-            </Button>
-          </Tooltip>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            New Endpoint
+          </Button>
         }
+      />
+      <CreateEndpointModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
       />
 
       {workspaceKey ? (

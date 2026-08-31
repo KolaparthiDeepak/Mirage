@@ -2,39 +2,37 @@
 import { useMemo, useState } from "react";
 import { useViewModel } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
-import { Button, Select, Tabs, Tooltip } from "@/app/_ui";
+import { Button, Select, Tabs } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { ProjectGrid } from "@/app/_features/projects/ProjectGrid";
 import { ProjectEmptyState } from "@/app/_features/projects/ProjectEmptyState";
+import { CreateProjectModal } from "@/app/_features/projects/CreateProjectModal";
 import styles from "@/app/_features/projects/projects.module.css";
 
 type Sort = "name" | "cases" | "endpoints";
-
-const header = (
-  <PageHeader
-    title="Your mock APIs"
-    description="Create, organize and run isolated mock APIs for development and testing."
-    actions={
-      <Tooltip label="Preview — coming soon">
-        <Button
-          variant="primary"
-          aria-disabled={true}
-          className={styles.disabledBtn}
-          onClick={(e) => e.preventDefault()}
-        >
-          New Project
-        </Button>
-      </Tooltip>
-    }
-  />
-);
 
 export default function ProjectsPage() {
   const { projects } = useViewModel();
   const [q, setQ] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [sort, setSort] = useState<Sort>("name");
+  const [createOpen, setCreateOpen] = useState(false);
   const query = useDebounced(q, 150).trim().toLowerCase();
+
+  const header = (
+    <PageHeader
+      title="Your mock APIs"
+      description="Create, organize and run isolated mock APIs for development and testing."
+      actions={
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
+          New Project
+        </Button>
+      }
+    />
+  );
+  const createModal = (
+    <CreateProjectModal open={createOpen} onClose={() => setCreateOpen(false)} />
+  );
 
   const visible = useMemo(() => {
     const filtered = query
@@ -56,7 +54,8 @@ export default function ProjectsPage() {
     return (
       <>
         {header}
-        <ProjectEmptyState />
+        {createModal}
+        <ProjectEmptyState onCreate={() => setCreateOpen(true)} />
       </>
     );
   }
@@ -64,6 +63,7 @@ export default function ProjectsPage() {
   return (
     <>
       {header}
+      {createModal}
       <div className={styles.toolbar}>
         <input
           className={styles.search}
