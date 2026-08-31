@@ -102,3 +102,33 @@
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
+
+/* Stacked "cards" on narrow screens — <table> semantics kept, internals go block. */
+@media (max-width: 720px) {
+  .table thead {
+    display: none;
+  }
+
+  .row {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .row td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    border: none;
+    padding: var(--space-1) 0;
+    white-space: normal;
+  }
+
+  .row td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+}

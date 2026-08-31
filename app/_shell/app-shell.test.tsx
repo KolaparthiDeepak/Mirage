@@ -62,6 +62,11 @@ describe("AppShell", () => {
     expect(screen.getByRole("dialog")).toBeDefined();
   });
 
+  it("keeps the mobile navigation hamburger in the DOM (CSS-hidden at desktop)", () => {
+    renderShell();
+    expect(screen.getByRole("button", { name: "Open navigation" })).toBeDefined();
+  });
+
   it("⌘K toggles the palette closed again", () => {
     renderShell();
 

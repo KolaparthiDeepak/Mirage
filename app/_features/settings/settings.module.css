@@ -42,7 +42,9 @@
 
 .dl dd {
   margin: 0;
+  min-width: 0;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .code {

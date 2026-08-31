@@ -109,6 +109,42 @@ describe("EndpointWorkspace", () => {
     expect(url).not.toContain("c=");
   });
 
+  it("renders the mobile column tabs and reflects the active column", () => {
+    render(
+      <PreviewProvider>
+        <ToastProvider>
+          <EndpointWorkspace project={project} />
+        </ToastProvider>
+      </PreviewProvider>,
+    );
+
+    expect(screen.getByRole("tab", { name: "Endpoints" })).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Cases" })).toBeDefined();
+    expect(screen.getByRole("tab", { name: "Request" })).toBeDefined();
+
+    const workspace = document.querySelector("[data-mobile-tab]")!;
+    expect(workspace.getAttribute("data-mobile-tab")).toBe("endpoints");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Cases" }));
+    expect(workspace.getAttribute("data-mobile-tab")).toBe("cases");
+
+    // the three columns are exposed as tabpanels
+    expect(screen.getAllByRole("tabpanel").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("advances the mobile tab to cases when an endpoint is selected", () => {
+    render(
+      <PreviewProvider>
+        <ToastProvider>
+          <EndpointWorkspace project={project} />
+        </ToastProvider>
+      </PreviewProvider>,
+    );
+    const workspace = document.querySelector("[data-mobile-tab]")!;
+    fireEvent.click(screen.getByText("EP2"));
+    expect(workspace.getAttribute("data-mobile-tab")).toBe("cases");
+  });
+
   it("shows an empty state when no case is selected", () => {
     nav.sp = new URLSearchParams("e=EP1");
     render(

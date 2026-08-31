@@ -46,14 +46,14 @@ export function VariableTable() {
                 const shown = revealed.has(v.id);
                 return (
                   <tr key={v.id}>
-                    <td className={styles.mono}>{v.key}</td>
-                    <td className={styles.mono}>
+                    <td className={styles.mono} data-label="Variable">{v.key}</td>
+                    <td className={styles.mono} data-label="Value">
                       {shown ? v.value : "••••••••"}
                     </td>
-                    <td>
+                    <td data-label="Scope">
                       <Badge tone="neutral">{v.scope}</Badge>
                     </td>
-                    <td className={styles.actions}>
+                    <td className={styles.actions} data-label="Actions">
                       <button
                         type="button"
                         className={styles.linkBtn}

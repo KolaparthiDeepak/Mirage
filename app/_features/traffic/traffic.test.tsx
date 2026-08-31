@@ -95,6 +95,13 @@ describe("TrafficTable", () => {
     render(<TrafficTable entries={[]} />);
     expect(screen.getByText("No traffic")).toBeDefined();
   });
+
+  it("labels every body cell with data-label for the stacked mobile layout", () => {
+    render(<TrafficTable entries={entries} />);
+    const cells = document.querySelectorAll("tbody td");
+    expect(cells.length).toBe(entries.length * 5);
+    cells.forEach((td) => expect(td.getAttribute("data-label")).toBeTruthy());
+  });
 });
 
 describe("TrafficDrawer", () => {

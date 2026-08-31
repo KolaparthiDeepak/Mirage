@@ -63,7 +63,7 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         <Tabs tabs={MOBILE_TABS} active={mobileTab} onChange={setMobileTab} />
       </div>
 
-      <div className={styles.col} data-col="endpoints">
+      <div className={styles.col} data-col="endpoints" role="tabpanel" aria-label="Endpoints">
         <h2 className={styles.colHeader}>Endpoints</h2>
         <EndpointList
           endpoints={project.endpoints}
@@ -75,7 +75,7 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         />
       </div>
 
-      <div className={styles.col} data-col="cases">
+      <div className={styles.col} data-col="cases" role="tabpanel" aria-label="Cases">
         <h2 className={styles.colHeader}>
           Cases <span className={styles.colHint}>{commandCode(selectedEndpoint.path)}</span>
         </h2>
@@ -89,7 +89,7 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         />
       </div>
 
-      <div className={styles.col} data-col="request">
+      <div className={styles.col} data-col="request" role="tabpanel" aria-label="Request">
         <h2 className={styles.colHeader}>Request</h2>
         {selectedCase ? (
           <>

@@ -23,17 +23,17 @@ export function TrafficRow({ entry, selected, onSelect }: Props) {
       onClick={onSelect}
       onKeyDown={onKeyDown}
     >
-      <td>
+      <td data-label="Method">
         <MethodPill method={entry.method} />
       </td>
-      <td className={styles.mono} title={entry.path}>
+      <td className={styles.mono} title={entry.path} data-label="Endpoint">
         {commandCode(entry.path)}
       </td>
-      <td>
+      <td data-label="Status">
         <StatusCode code={entry.status} />
       </td>
-      <td className={`${styles.muted} ${styles.tabular}`}>{entry.at}</td>
-      <td className={styles.tabular}>{entry.ms} ms</td>
+      <td className={`${styles.muted} ${styles.tabular}`} data-label="Time">{entry.at}</td>
+      <td className={styles.tabular} data-label="Duration">{entry.ms} ms</td>
     </tr>
   );
 }
