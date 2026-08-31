@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { parse } from "yaml";
 import { ruleYaml } from "./rule-yaml";
 
 describe("ruleYaml", () => {
@@ -54,5 +55,34 @@ describe("ruleYaml", () => {
       "/x/v1",
     );
     expect(out).toContain(`{ query: mode, notEquals: "live" }`);
+  });
+
+  it("escapes a value containing a double quote so it stays one condition", () => {
+    const out = ruleYaml(
+      [{ field: "body.msg", op: "equals", value: 'he said "hi"' }],
+      "c",
+      "POST",
+      "/x/v1",
+    );
+    expect(out).toContain(String.raw`equals: "he said \"hi\""`);
+    const match = parse(out)[0].request.match;
+    expect(match).toEqual([{ jsonPath: "$.msg", equals: 'he said "hi"' }]);
+  });
+
+  it("skips a field that would inject YAML, keeping only the valid condition", () => {
+    const out = ruleYaml(
+      [
+        { field: 'a }, { jsonPath: $.b, exists: "c', op: "equals", value: "x" },
+        { field: "body.ok", op: "equals", value: "y" },
+      ],
+      "c",
+      "POST",
+      "/x/v1",
+    );
+    expect(out).toContain("# invalid field");
+    // the injected object never reaches the parsed match array
+    expect(parse(out)[0].request.match).toEqual([
+      { jsonPath: "$.ok", equals: "y" },
+    ]);
   });
 });

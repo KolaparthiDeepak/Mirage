@@ -1,7 +1,18 @@
+import { yamlScalar } from "./yaml-scalar";
+
 export interface RuleCondition {
   field: string;
   op: string;
   value: string;
+}
+
+/** `field` is a builder path like `body.x`, `header.X`, `query.X`, or a bare
+ *  key. Anything outside these shapes can inject arbitrary YAML into the flow
+ *  mapping, so it's rejected. */
+const FIELD_RE = /^(?:(?:body|header|query)\.[\w.$-]+|[\w.$-]+)$/;
+
+function isValidField(field: string): boolean {
+  return FIELD_RE.test(field);
 }
 
 /** Map a builder `field` to a YAML match target.
@@ -19,7 +30,7 @@ function target(field: string): string {
 }
 
 function operator(op: string, value: string): string {
-  return op === "exists" ? "exists: true" : `${op}: "${value}"`;
+  return op === "exists" ? "exists: true" : `${op}: ${yamlScalar(value)}`;
 }
 
 /** A `routes/*.yaml` list-item block for one response-selection rule. Pure. */
@@ -35,8 +46,19 @@ export function ruleYaml(
     `    method: ${method}`,
     `    path: ${path}`,
   ];
-  if (conditions.length > 0) {
-    const match = conditions
+
+  const valid = conditions.filter((c) => isValidField(c.field));
+  const skipped = conditions.filter((c) => !isValidField(c.field));
+
+  if (skipped.length > 0) {
+    lines.push(
+      `    # invalid field — condition(s) skipped: ${skipped
+        .map((c) => JSON.stringify(c.field))
+        .join(", ")}`,
+    );
+  }
+  if (valid.length > 0) {
+    const match = valid
       .map((c) => `{ ${target(c.field)}, ${operator(c.op, c.value)} }`)
       .join(", ");
     lines.push(`    match: [${match}]`);

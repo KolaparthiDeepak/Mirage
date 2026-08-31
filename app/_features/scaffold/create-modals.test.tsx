@@ -26,10 +26,10 @@ describe("CreateProjectModal", () => {
     fireEvent.change(name, { target: { value: "Card Service" } });
     expect(screen.getByText("slug: card-service")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate YAML" }));
 
     const pre = document.querySelector("pre")!;
-    expect(pre.textContent).toContain("name: Card Service");
+    expect(pre.textContent).toContain('name: "Card Service"');
     expect(pre.textContent).toContain("slug: card-service");
     expect(screen.getByText("Preview")).toBeDefined();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -43,11 +43,12 @@ describe("CreateEndpointModal", () => {
     fireEvent.change(screen.getByPlaceholderText("/my/path"), {
       target: { value: "/x" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate YAML" }));
 
     const pre = document.querySelector("pre")!;
     expect(pre.textContent).toContain("method: POST");
-    expect(pre.textContent).toContain("path: /x");
+    expect(pre.textContent).toContain('path: "/x"');
+    expect(pre.textContent).toContain("id: post-x-ok");
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
@@ -70,10 +71,10 @@ describe("CreateCaseModal", () => {
     fireEvent.change(screen.getByDisplayValue("200"), {
       target: { value: "404" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate YAML" }));
 
     const pre = document.querySelector("pre")!;
-    expect(pre.textContent).toContain("id: card-blocked");
+    expect(pre.textContent).toContain('id: "card-blocked"');
     expect(pre.textContent).toContain("status: 404");
     expect(fetchSpy).not.toHaveBeenCalled();
   });

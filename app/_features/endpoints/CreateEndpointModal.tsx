@@ -60,7 +60,7 @@ export function CreateEndpointModal({
             )
           }
         >
-          Create
+          Generate YAML
         </Button>
 
         {yaml ? (

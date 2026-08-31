@@ -4,7 +4,7 @@ import type { EndpointVM } from "@/src/viewer/model";
 import { Button, Input, Select, CopyButton, Modal } from "@/app/_ui";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { slugify, newCaseYaml } from "@/app/_lib/scaffold-yaml";
+import { slugify, newCaseYaml, jsonBodyOrEmpty } from "@/app/_lib/scaffold-yaml";
 import styles from "./cases.module.css";
 
 const STATUSES = [200, 201, 400, 401, 404, 409, 500];
@@ -30,6 +30,7 @@ export function CreateCaseModal({
 
   const target = endpoint ?? list.find((e) => e.key === targetKey) ?? list[0];
   const reset = () => setYaml(null);
+  const bodyValid = jsonBodyOrEmpty(body).valid;
 
   return (
     <Modal open={open} onClose={onClose} title="Create response case">
@@ -93,6 +94,11 @@ export function CreateCaseModal({
               reset();
             }}
           />
+          {!bodyValid ? (
+            <span className={styles.warn} role="alert">
+              Response body isn&apos;t valid JSON — using <code>{"{}"}</code>
+            </span>
+          ) : null}
         </label>
 
         <label className={styles.field}>
@@ -122,7 +128,7 @@ export function CreateCaseModal({
             )
           }
         >
-          Create case
+          Generate YAML
         </Button>
 
         {yaml ? (
