@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Button } from "@/app/_ui";
+import { Button, useToast } from "@/app/_ui";
 import styles from "./runner.module.css";
 
 export function BodyEditor({
@@ -11,6 +11,7 @@ export function BodyEditor({
   onChange: (v: string) => void;
 }) {
   const [invalid, setInvalid] = useState(false);
+  const toast = useToast();
   const lineCount = value.split("\n").length;
 
   function format() {
@@ -26,8 +27,9 @@ export function BodyEditor({
   async function copy() {
     try {
       await navigator.clipboard?.writeText(value);
+      toast("Copied to clipboard");
     } catch {
-      /* clipboard unavailable — nothing to do */
+      toast("Couldn't copy to clipboard");
     }
   }
 

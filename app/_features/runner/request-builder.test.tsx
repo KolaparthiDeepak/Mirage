@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { CaseVM } from "@/src/viewer/model";
 import type { Verdict } from "@/src/viewer/verdict";
+import { ToastProvider } from "@/app/_ui";
 import { RequestBuilder } from "./RequestBuilder";
 import { ResponseViewer } from "./ResponseViewer";
 import { VerdictLine } from "./VerdictLine";
@@ -16,6 +17,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+
+const renderT = (ui: React.ReactElement) =>
+  render(<ToastProvider>{ui}</ToastProvider>);
 
 const fixture: CaseVM = {
   id: "case-1",
@@ -46,7 +50,7 @@ describe("RequestBuilder", () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse());
     vi.stubGlobal("fetch", fetchMock);
     const onExecuted = vi.fn();
-    const { container } = render(
+    const { container } = renderT(
       <RequestBuilder case_={fixture} onExecuted={onExecuted} />,
     );
 
@@ -68,7 +72,7 @@ describe("RequestBuilder", () => {
   it("omits the body for a GET (noBody rule)", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse());
     vi.stubGlobal("fetch", fetchMock);
-    render(<RequestBuilder case_={fixture} />);
+    renderT(<RequestBuilder case_={fixture} />);
 
     fireEvent.change(screen.getByLabelText("Request Method"), {
       target: { value: "GET" },
@@ -85,7 +89,7 @@ describe("RequestBuilder", () => {
       .fn()
       .mockResolvedValue(okResponse({ "x-mock-rule-id": "case-1" }));
     vi.stubGlobal("fetch", fetchMock);
-    const { container } = render(<RequestBuilder case_={fixture} />);
+    const { container } = renderT(<RequestBuilder case_={fixture} />);
 
     fireEvent.click(screen.getByText("Execute"));
 
@@ -95,7 +99,7 @@ describe("RequestBuilder", () => {
 
   it("shows an error line when fetch rejects, without crashing", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
-    render(<RequestBuilder case_={fixture} />);
+    renderT(<RequestBuilder case_={fixture} />);
 
     fireEvent.click(screen.getByText("Execute"));
 
@@ -106,7 +110,7 @@ describe("RequestBuilder", () => {
   it("⌘↵ inside the builder triggers Execute", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse());
     vi.stubGlobal("fetch", fetchMock);
-    const { container } = render(<RequestBuilder case_={fixture} />);
+    const { container } = renderT(<RequestBuilder case_={fixture} />);
 
     fireEvent.keyDown(container.firstElementChild as Element, {
       key: "Enter",
@@ -118,7 +122,7 @@ describe("RequestBuilder", () => {
 
   it("renders request notes", () => {
     vi.stubGlobal("fetch", vi.fn());
-    render(<RequestBuilder case_={fixture} />);
+    renderT(<RequestBuilder case_={fixture} />);
     expect(screen.getByText(/templated field/)).toBeDefined();
   });
 });

@@ -1,14 +1,18 @@
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { ToastProvider } from "@/app/_ui";
 import { BodyEditor } from "./BodyEditor";
 import { HeadersEditor } from "./HeadersEditor";
 
 afterEach(() => cleanup());
 
+const renderT = (ui: React.ReactElement) =>
+  render(<ToastProvider>{ui}</ToastProvider>);
+
 describe("BodyEditor", () => {
   it("pretty-prints valid JSON on Format, calling onChange once", () => {
     const onChange = vi.fn();
-    render(<BodyEditor value={'{"a":1}'} onChange={onChange} />);
+    renderT(<BodyEditor value={'{"a":1}'} onChange={onChange} />);
     fireEvent.click(screen.getByText("Format"));
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith('{\n  "a": 1\n}');
@@ -16,7 +20,7 @@ describe("BodyEditor", () => {
 
   it("marks invalid JSON without calling onChange, and clears the marker on edit", () => {
     const onChange = vi.fn();
-    render(<BodyEditor value={"{bad"} onChange={onChange} />);
+    renderT(<BodyEditor value={"{bad"} onChange={onChange} />);
     fireEvent.click(screen.getByText("Format"));
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByText(/invalid json/i)).toBeDefined();

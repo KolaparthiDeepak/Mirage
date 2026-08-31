@@ -5,7 +5,7 @@ import type { EndpointVM } from "@/src/viewer/model";
 import { useProject } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { Button, Tooltip } from "@/app/_ui";
+import { Button, Tooltip, EmptyState } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { EndpointToolbar } from "@/app/_features/endpoints/EndpointToolbar";
 import { EndpointList } from "@/app/_features/endpoints/EndpointList";
@@ -90,7 +90,7 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
           />
 
           {filtered.length === 0 ? (
-            <div className={styles.empty}>No endpoints match.</div>
+            <EmptyState title="No endpoints match" body="Try a different search or method filter." />
           ) : view === "grouped" ? (
             groups.map(([prefix, eps]) => (
               <section key={prefix}>
