@@ -1450,17 +1450,111 @@ Base at Phase 4 start: `702d426`. 4 tasks (P4.1–P4.4). Same rules (test → fa
 
 ---
 
-# PHASE 5 — Rules, Scenarios, Public, Settings (task inventory)
+# PHASE 5 — Rules, Scenarios, Public, Settings
 
-- **T5.1 `RuleList` + `RuleCard` (READ, REAL)** — per endpoint, render `CaseVM.match` as IF chips (`field op value`) + THEN (`return case <id>` / `status <code>`), in route order. `field` derivation: `jsonPath` `$.x` -> `body.x`; `header` -> `header.X`; `query` -> `query.X`. Test: a `card.yaml`-derived fixture renders the expected chips in order.
-- **T5.2 `RuleBuilder` + `ConditionRow` (PREVIEW)** — visual editor writing `usePreview().state.rulesDraft[endpointKey]`; `Export YAML` -> `routes/*.yaml` block string + `<CopyButton>`. `<PreviewBadge>`; never claims the rule is live. Test: adding a condition updates the store; export produces expected YAML for a known input.
-- **T5.3 `p/[slug]/rules/page.tsx`** — READ list on top, PREVIEW builder below a divider. Test: both sections present.
-- **T5.4 `ScenarioCanvas` + `ScenarioNode` + `ScenarioConnector` + `ScenarioToolbar` (PREVIEW)** — dotted dark canvas, vertical node stack, thin connectors, add / remove / edit step (step = endpoint + expected status), `Run scenario` disabled + tooltip. State in `usePreview().state.scenarios[slug]`. Test: add step -> node appears + persists; run button disabled.
-- **T5.5 `p/[slug]/scenarios/page.tsx`** — `<PreviewBadge>`, seeded "Card Blocking" scenario (GET_CARD -> CHECK_CARD_ELIGIBILITY -> BLOCK_CARD -> NOTIFY_CUSTOMER). Test: seed renders 4 nodes.
-- **T5.6 `PublicServerPanel` + `p/[slug]/public/page.tsx` (REAL)** — base URL + `<CopyButton>`; `/m/<slug>/__spec` link shown only when the project has OpenAPI. Thread a `Set<string>` of slugs-with-spec from `(app)/layout.tsx` (reading `bundleJson.projects[slug].openApiDoc != null` there) through a small context — **do not edit `src/viewer/model.ts`**. QR = hand-rolled SVG/CSS of the base URL, or a bordered placeholder labelled "QR" if a real QR is too heavy (YAGNI — placeholder is acceptable). Test: copy button carries the base URL; spec link hidden when no OpenAPI.
-- **T5.7 `SettingsTabs` + `p/[slug]/settings/page.tsx` (READ REAL / edit PREVIEW)** — tabs General / Access / Server / Import-Export / Danger Zone via `?tab=`. General + Server pre-filled from real config (name, description, `basePath`, slug disabled, `defaults.cors`, `defaults.delayMs`) — read the same `bundleJson.projects[slug]` via the layout context. "Save" -> `project.yaml` diff string + `<CopyButton>` + `<PreviewBadge>`. Danger Zone "Delete project" -> confirm modal that only explains the repo-file deletion (no action). Import/Export: JSON export real (download a `mocks.generated.json` slice), OpenAPI note real, Postman disabled. Test: real values render; Save produces YAML text; Delete opens the explain modal.
-- **T5.8 `CreateProjectModal` / `CreateCaseModal` / new-endpoint (PREVIEW)** — each emits a copy-paste YAML stub; wire the buttons disabled in Task 10 / T2.4 / T2.13 to open them. Test: filling the form updates the generated YAML preview.
-- **Phase 5 exit:** every nav item leads to a complete page; rules read REAL; all create / edit paths emit YAML; `npm run check` green.
+Base at Phase 5 start: after the Phase 4 fix wave (see ledger for the exact SHA). 5 tasks (P5.1–P5.5). Same rules (test → fail → implement → `npm run check` EXIT 0 → `npm run build` EXIT 0 → commit; no `import React`; component tests `*.test.tsx` + `@testing-library/react` + `afterEach(cleanup)`; no hardcoded hex; no `git add -A`; Node v26; commit trailer).
+
+### Reference
+- `ViewModel`/`ProjectVM`/`EndpointVM`/`CaseVM` as before. `CaseVM.match: MatchCondition[]`, `CaseVM.expected.status/body`.
+- `MatchCondition` (`@/src/engine/types`): one target `{ jsonPath }` | `{ header }` | `{ query }` + one op `{ equals }` | `{ notEquals }` | `{ contains }` | `{ regex }` | `{ exists }`.
+- `@/app/_lib/match-summary` (P2.4): `matchSummary(match): string` — reuse for READ chips.
+- `@/app/_lib/preview-store`: `state.scenarios: Record<slug, Scenario[]>` (`Scenario = { id; name; steps: ScenarioStep[] }`, `ScenarioStep = { id; endpointKey; expectedStatus }`), `state.rulesDraft: Record<endpointKey, DraftRule[]>` (`DraftRule = { id; field; op; value; caseId }`).
+- `@/app/_lib/nav`, `@/app/_lib/mock-url` (`mockPath`/`mockBaseUrl`), `@/app/_lib/endpoint-label`.
+- Primitives: `@/app/_ui` (`Tabs`, `Modal`, `Button`, `Input`, `Select`, `Badge`, `Drawer`, `CopyButton`, `JsonView`, `EmptyState`, `MethodPill`, `StatusCode`, `useToast`). `@/app/_shell` (`PageHeader`, `PreviewBadge`).
+- **New in P5.1**: `app/_lib/project-config-context.tsx` — `(app)/layout.tsx` reads `bundleJson` (`CompiledBundle`, `projects: Record<slug, ProjectConfig>`; `ProjectConfig = { name; slug; basePath?; defaults: { delayMs; cors; notFound }; openApiDoc?; routes }`) and provides `Record<slug, { name; basePath?; defaults: {delayMs; cors}; hasOpenApi: boolean }>` via context. **Do NOT edit `src/viewer/model.ts`.**
+- Sidebar `soon` flags remaining: project `Rules` (P5.2), `Scenarios` (P5.3), `Settings` (P5.4). Drop each in its task + fix `shell.test.tsx`. Leave `CommandPalette`'s `go-endpoints` (workspace `/endpoints`) `preview` — that page is out of scope.
+
+---
+
+### P5.1: project-config context + Public Mock Server page (REAL)
+
+**Files:** `app/_lib/project-config-context.tsx` + `.test.tsx`; modify `app/(app)/layout.tsx`; `app/_features/public/PublicServerPanel.tsx`, `public.module.css`; `app/(app)/p/[slug]/public/page.tsx`; add a link from the Overview page (`app/(app)/p/[slug]/page.tsx`).
+**Produces:**
+- `project-config-context.tsx`: `interface ProjectConfigLite { name: string; basePath?: string; defaults: { delayMs: number; cors: boolean }; hasOpenApi: boolean }`; `<ProjectConfigProvider configs={Record<string, ProjectConfigLite>}>`; `useProjectConfig(slug): ProjectConfigLite | null`.
+- `(app)/layout.tsx`: build `configs` from `bundleJson.projects` — `{ name: p.name, basePath: p.basePath, defaults: { delayMs: p.defaults.delayMs, cors: p.defaults.cors }, hasOpenApi: p.openApiDoc != null }`. Wrap children in `<ProjectConfigProvider configs={configs}>` inside `ViewModelProvider`.
+- `PublicServerPanel`: `{ slug: string; basePath?: string; hasOpenApi: boolean }` — "Base URL" field showing `mockPath(slug, basePath)` (mono) + `<CopyButton text={() => mockBaseUrl(slug, basePath)} label="Copy base URL"/>`; a "Server" line from `useProjectConfig` ("CORS enabled · {delayMs} ms default delay"); an "OpenAPI spec" field with a link to `/m/${slug}/__spec` + `<CopyButton>` — **only when `hasOpenApi`**; a "QR" placeholder: a bordered ~140px square + centered "QR" label + caption "Scan for the base URL" (a real QR generator is NOT worth a dependency — YAGNI).
+- Page: `<PageHeader title="Public mock server" description={project.name}/>` + `<PublicServerPanel .../>`.
+- Overview page: a small "Public URL & docs →" link to `/p/<slug>/public` near the base-URL line.
+
+**Test:** `project-config-context.test.tsx` (provide + resolve + null for unknown). `public.test.tsx`: renders the base URL; CopyButton present; `hasOpenApi: false` → `/__spec` link absent; `true` → present.
+
+**Commit** `feat(public): public mock server page + project-config context`.
+
+---
+
+### P5.2: Rules page — READ (real) + builder (preview)
+
+**Files:** `app/_features/rules/{RuleList,RuleCard,RuleBuilder,ConditionRow}.tsx`, `rules.module.css`; `app/(app)/p/[slug]/rules/page.tsx`; `app/_lib/rule-yaml.ts` + `.test.ts` (pure); modify `Sidebar.tsx` + `shell.test.tsx`.
+**Produces:**
+- `RuleCard`: `{ case_: CaseVM; order: number }` — READ real. "IF": `case_.match` rendered via `matchSummary` (or per-condition chips); "THEN": `return case` `<code>{case_.label}</code>` + `<StatusCode code={case_.expected.status}/>`; `<Badge tone="neutral">rule {order}</Badge>`. Empty match → "fallback — matches any request".
+- `RuleList`: `{ endpoint: EndpointVM }` — `endpoint.cases.map((c, i) => <RuleCard case_={c} order={i+1}/>)` in route order (that IS precedence). Explainer: "Response selection tries these in order; the first whose conditions all match wins."
+- `ConditionRow`: `{ condition: {field; op; value}; onChange; onRemove }` — `field` `<Input>` (placeholder `body.cardLast4`), `op` `<Select>` (equals/notEquals/contains/regex/exists), `value` `<Input>` (hidden when op = `exists`).
+- `RuleBuilder`: `{ slug: string; endpoint: EndpointVM }` — PREVIEW, reads/writes `usePreview().state.rulesDraft[endpoint.key]`. Add/remove/edit conditions; a `caseId` `<Select>` from `endpoint.cases`. `Export YAML` `<Button>` → `ruleYaml(...)` in a `<pre>` + `<CopyButton>` + `<PreviewBadge>` + note "Paste into `mocks/<slug>/routes/*.yaml` and redeploy — this doesn't change the running mock."
+- `rule-yaml.ts`: `ruleYaml(conditions: {field; op; value}[], caseId: string, method: string, path: string): string` → a `routes/*.yaml` list-item block; map `body.x`→`{ jsonPath: $.x }`, `header.X`→`{ header: X }`, `query.X`→`{ query: X }`. Pure. Test against a known input.
+- Page: `use(params)`, `useProject(slug)`. An endpoint `<Select>` at the top picks which endpoint's rules to show (avoid dumping all 7). Then `<RuleList endpoint={selected}/>` (READ) + a divider + `<RuleBuilder slug={slug} endpoint={selected}/>` (PREVIEW).
+
+**Test:** `rules.test.tsx` — fixture endpoint, 3 cases (one empty-match) → 3 `RuleCard`s in order, empty says "fallback"; `RuleBuilder` add-condition writes the preview store (`<PreviewProvider>`), Export YAML contains the field/op. `rule-yaml.test.ts` — known input → expected.
+
+**Commit** `feat(rules): rules page — read real, builder preview`.
+
+---
+
+### P5.3: Scenario Builder (PREVIEW)
+
+**Files:** `app/_features/scenarios/{ScenarioCanvas,ScenarioNode,ScenarioToolbar}.tsx`, `scenarios.module.css`; `app/(app)/p/[slug]/scenarios/page.tsx`; modify `Sidebar.tsx` + `shell.test.tsx`.
+**Produces:**
+- `ScenarioNode`: `{ step: ScenarioStep; index: number; endpoints: EndpointVM[]; onChange; onRemove }` — compact card: "Step {index+1}", endpoint `<Select>` (`endpoints.map(e => ({ value: e.key, label: commandCode(e.path) }))`), expected-status `<Select>`/`<Input type=number>`, remove `<button>`. Token border.
+- `ScenarioCanvas`: `{ scenario: Scenario; endpoints: EndpointVM[]; onChange: (s: Scenario) => void }` — vertically-stacked `<ScenarioNode>`s with 1px token connector divs between; dotted background (`radial-gradient` of `var(--border)` dots). "Add step" appends.
+- `ScenarioToolbar`: name `<Input>`, `Add step` `<Button>`, `Run scenario` `<Button disabled>` in a `<Tooltip label="Preview — scenarios don't execute yet">`.
+- Page: `use(params)`, `useProject(slug)`, `usePreview()`. Reads `state.scenarios[slug] ?? []`. If empty, seed a "Card Blocking" scenario: 4 steps (GET_CARD → CHECK_CARD_ELIGIBILITY → BLOCK_CARD → NOTIFY_CUSTOMER, each `expectedStatus: 200`), resolving keys from `project.endpoints` by `commandCode` match (skip a step if not found); persist the seed via `useEffect` → `set`. `<PageHeader title="Scenarios"/>` + `<PreviewBadge/>` + `<ScenarioToolbar/>` + `<ScenarioCanvas/>`. Edits → `set(s => ({ ...s, scenarios: { ...s.scenarios, [slug]: next } }))`.
+
+**Test:** `scenarios.test.tsx` (`<PreviewProvider>`) — seeded scenario renders its nodes; "Add step" appends + persists; "Run scenario" `disabled`.
+
+**Commit** `feat(scenarios): scenario builder (preview)`.
+
+---
+
+### P5.4: Project Settings (READ real / edit preview)
+
+**Files:** `app/_features/settings/{SettingsTabs,GeneralTab,ServerTab,ImportExportTab,DangerZoneTab}.tsx`, `settings.module.css`; `app/(app)/p/[slug]/settings/page.tsx`; `app/_lib/project-yaml.ts` + `.test.ts` (pure); modify `Sidebar.tsx` + `shell.test.tsx`.
+**Produces:**
+- Page: `use(params)`, `useProject(slug)` + `useProjectConfig(slug)` (P5.1). `<PageHeader title="Settings" description={project.name}/>`. `<SettingsTabs>` via `?tab=` (default "general").
+- `GeneralTab`: `<Input>` Name (pre-filled `config.name`), `<Input>` Description (no real field — empty, labelled "shown in the UI"), `<Input>` Base path (pre-filled `config.basePath ?? ""`), `<Input disabled>` Slug (`project.slug`). "Save changes" `<Button>` → `projectYaml({ name, slug, basePath })` in a `<pre>` + `<CopyButton>` + `<PreviewBadge>` + note "Paste into `mocks/<slug>/project.yaml` and redeploy — the browser can't write the repo."
+- `ServerTab`: READ real — "Status: Running", "CORS: {config.defaults.cors ? 'enabled' : 'disabled'}", "Default delay: {config.defaults.delayMs} ms", "Base URL: {mockPath(slug, basePath)}". Read-only.
+- `ImportExportTab`: "Export JSON" `<Button>` → download a JSON blob `{ project: projectVM }` (real). An OpenAPI note (real). "Postman import" `<Button aria-disabled>` + tooltip (preview).
+- `DangerZoneTab`: "Delete project" `<Button className=danger>` → a `<Modal>` explaining "Deleting removes `mocks/<slug>/` from the repository. Do it there and redeploy — this UI can't." + a "Got it" close. NO destructive action.
+- `project-yaml.ts`: `projectYaml(input: { name: string; slug: string; basePath?: string }): string` → minimal valid `project.yaml`. Pure. Test.
+
+**Test:** `settings.test.tsx` — General pre-fills real name + basePath; "Save changes" renders a `<pre>` containing `name:` + the value; Danger Zone opens the explain modal (no delete). `project-yaml.test.ts` — known input → expected.
+
+**Commit** `feat(settings): project settings — read real, edits emit YAML`.
+
+---
+
+### P5.5: Creation modals (PREVIEW) — wire the disabled buttons
+
+**Files:** `app/_features/projects/CreateProjectModal.tsx`, `app/_features/cases/CreateCaseModal.tsx`, `app/_features/endpoints/CreateEndpointModal.tsx`, extend `*.module.css`; `app/_lib/scaffold-yaml.ts` + `.test.ts` (pure); modify `app/(app)/projects/page.tsx` + `ProjectEmptyState.tsx`, `app/(app)/p/[slug]/endpoints/page.tsx`, `app/(app)/p/[slug]/cases/page.tsx` to open the modals.
+**Produces:**
+- `scaffold-yaml.ts`: `newProjectYaml({ name, slug })`, `newEndpointYaml({ method, path })`, `newCaseYaml({ id, status, body, path, method })` — copy-paste stub strings. Pure. Tests.
+- `CreateProjectModal`: `{ open; onClose }` — `<Modal title="Create a mock server">` — Name `<Input>` (+ slug preview), a presentational "choose how to start" row (Blank / OpenAPI note / Postman+Example disabled). "Create" → `newProjectYaml(...)` + `<CopyButton>` + `<PreviewBadge>` + "Create `mocks/<slug>/project.yaml` with this and redeploy." NO backend write.
+- `CreateCaseModal`: `{ open; onClose; endpoint: EndpointVM }` — Name, Status `<Select>`, Response body `<textarea>` (JSON), Latency `<Input>`. "Create case" → `newCaseYaml(...)` + `<CopyButton>` + `<PreviewBadge>`.
+- `CreateEndpointModal`: `{ open; onClose }` — Method `<Select>`, Path `<Input>`. "Create" → `newEndpointYaml(...)` + `<CopyButton>` + `<PreviewBadge>`.
+- Wiring: the currently `aria-disabled` + tooltip buttons → `onClick` opens the respective modal (make them look like real primary actions; the modal carries the preview framing).
+
+**Test:** `create-modals.test.tsx` — filling `CreateProjectModal`'s name updates the generated YAML `<pre>`; no network / no ViewModel mutation. `scaffold-yaml.test.ts` — known inputs → expected.
+
+**Commit** `feat(scaffold): creation modals emit copy-paste YAML (preview)`.
+
+---
+
+### Phase 5 exit criteria
+- Every sidebar nav item leads to a complete page (Rules, Scenarios, Settings live; Public reachable from Overview).
+- Rules READ view shows the real `match`-based precedence per endpoint; the builder is clearly PREVIEW + exports YAML.
+- Scenarios canvas edits + persists (sessionStorage); "Run" disabled.
+- Settings shows real compiled config (name, basePath, CORS, delay); every edit emits YAML, never a backend write.
+- All creation modals (project / endpoint / case) emit copy-paste YAML.
+- No new backend write anywhere; `npm run check` + `npm run build` green.
+- Final Phase 5 whole-branch review (opus) before Phase 6.
 
 ---
 
