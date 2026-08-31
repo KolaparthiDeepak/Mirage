@@ -15,7 +15,7 @@ export default function VariablesPage({ params }: { params: Promise<{ slug: stri
     <>
       <PageHeader
         title="Variables"
-        description="Local substitution only — never sent to the backend."
+        description="Local substitution only — never sent to the backend; kept in this tab's session storage."
         actions={<PreviewBadge />}
       />
       <VariableTable />

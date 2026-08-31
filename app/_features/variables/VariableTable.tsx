@@ -35,10 +35,10 @@ export function VariableTable() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Variable</th>
-                <th>Value</th>
-                <th>Scope</th>
-                <th aria-label="Actions" />
+                <th scope="col">Variable</th>
+                <th scope="col">Value</th>
+                <th scope="col">Scope</th>
+                <th scope="col" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -57,6 +57,8 @@ export function VariableTable() {
                       <button
                         type="button"
                         className={styles.linkBtn}
+                        aria-label={shown ? `Hide ${v.key}` : `Reveal ${v.key}`}
+                        aria-pressed={shown}
                         onClick={() => toggle(v.id)}
                       >
                         {shown ? "Hide" : "Reveal"}

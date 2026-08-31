@@ -18,7 +18,7 @@ export function TrafficRow({ entry, selected, onSelect }: Props) {
     <tr
       className={styles.row}
       tabIndex={0}
-      aria-selected={!!selected}
+      aria-current={selected ? "true" : undefined}
       data-selected={selected || undefined}
       onClick={onSelect}
       onKeyDown={onKeyDown}

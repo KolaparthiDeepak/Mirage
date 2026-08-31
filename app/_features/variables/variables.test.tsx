@@ -55,10 +55,10 @@ describe("VariableTable", () => {
     renderTable();
     addVariable("API_KEY", "sk-123", "QA");
 
-    fireEvent.click(within(rowFor("API_KEY")).getByRole("button", { name: "Reveal" }));
+    fireEvent.click(within(rowFor("API_KEY")).getByRole("button", { name: "Reveal API_KEY" }));
     expect(within(rowFor("API_KEY")).getByText("sk-123")).toBeDefined();
 
-    fireEvent.click(within(rowFor("API_KEY")).getByRole("button", { name: "Hide" }));
+    fireEvent.click(within(rowFor("API_KEY")).getByRole("button", { name: "Hide API_KEY" }));
     expect(within(rowFor("API_KEY")).queryByText("sk-123")).toBeNull();
     expect(within(rowFor("API_KEY")).getByText("••••••••")).toBeDefined();
   });

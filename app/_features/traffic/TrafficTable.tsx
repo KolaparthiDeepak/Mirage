@@ -19,11 +19,11 @@ export function TrafficTable({ entries, selectedId, onSelect }: Props) {
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Method</th>
-            <th>Endpoint</th>
-            <th>Status</th>
-            <th>Time</th>
-            <th>Response</th>
+            <th scope="col">Method</th>
+            <th scope="col">Endpoint</th>
+            <th scope="col">Status</th>
+            <th scope="col">Time</th>
+            <th scope="col">Duration</th>
           </tr>
         </thead>
         <tbody>

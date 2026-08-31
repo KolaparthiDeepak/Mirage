@@ -50,10 +50,10 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Method</th>
-                <th>Path</th>
-                <th>Status</th>
-                <th>Time</th>
+                <th scope="col">Method</th>
+                <th scope="col">Path</th>
+                <th scope="col">Status</th>
+                <th scope="col">Time</th>
               </tr>
             </thead>
             <tbody>
