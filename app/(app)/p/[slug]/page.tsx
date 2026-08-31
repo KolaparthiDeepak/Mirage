@@ -1,5 +1,6 @@
 "use client";
 import { use } from "react";
+import Link from "next/link";
 import { useProject } from "@/app/_lib/view-model-context";
 import { Badge, CopyButton, MethodPill, StatusCode, EmptyState } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
@@ -32,6 +33,9 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
       <div className={styles.statusLine}>
         <Badge tone="success">Running</Badge>
         <span className={styles.mono}>{mockPath(project.slug, project.basePath)}</span>
+        <Link className={styles.publicLink} href={`/p/${slug}/public`}>
+          Public URL &amp; docs →
+        </Link>
       </div>
 
       <ProjectStats project={project} />
