@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Input, MethodPill, StatusCode } from "@/app/_ui";
@@ -7,6 +7,7 @@ import { useViewModel } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
 import { searchViewModel } from "@/app/_lib/search";
 import { commandCode } from "@/app/_lib/endpoint-label";
+import { projectHref, endpointHref, caseHref } from "@/app/_lib/nav";
 import styles from "./shell.module.css";
 
 function Cube() {
@@ -32,6 +33,7 @@ export function GlobalSearch() {
   const router = useRouter();
   const model = useViewModel();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
 
   const [rawQuery, setRawQuery] = useState("");
   const [focused, setFocused] = useState(false);
@@ -47,7 +49,7 @@ export function GlobalSearch() {
       {
         label: "Projects",
         items: results.projects.map((project) => ({
-          href: `/p/${project.slug}`,
+          href: projectHref(project.slug),
           node: (
             <>
               <Cube />
@@ -60,7 +62,7 @@ export function GlobalSearch() {
       {
         label: "Endpoints",
         items: results.endpoints.map(({ project, endpoint }) => ({
-          href: `/p/${project.slug}/endpoints?e=${encodeURIComponent(endpoint.key)}`,
+          href: endpointHref(project.slug, endpoint.key),
           node: (
             <>
               <MethodPill method={endpoint.method} />
@@ -73,7 +75,7 @@ export function GlobalSearch() {
       {
         label: "Cases",
         items: results.cases.map(({ project, endpoint, case: c }) => ({
-          href: `/p/${project.slug}/endpoints?e=${encodeURIComponent(endpoint.key)}&c=${encodeURIComponent(c.id)}`,
+          href: caseHref(project.slug, endpoint.key, c.id),
           node: (
             <>
               <StatusCode code={c.expected.status} />
@@ -98,8 +100,23 @@ export function GlobalSearch() {
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
   useEffect(() => setHighlightIndex(0), [q]);
+  // Keep the highlight in range when the result set shrinks (M-12).
+  useEffect(() => {
+    setHighlightIndex((i) => Math.min(i, Math.max(0, flat.length - 1)));
+  }, [flat.length]);
 
   const panelOpen = focused && q.trim() !== "";
+
+  // Dismiss on outside pointerdown rather than on blur, so Tab can move into the
+  // result rows without collapsing the panel (I-4).
+  useEffect(() => {
+    if (!panelOpen) return;
+    function onDown(e: PointerEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setFocused(false);
+    }
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [panelOpen]);
 
   function blurInput() {
     wrapRef.current?.querySelector("input")?.blur();
@@ -125,9 +142,12 @@ export function GlobalSearch() {
     } else if (e.key === "Escape") {
       setRawQuery("");
       setExpanded(false);
+      setFocused(false);
       blurInput();
     }
   }
+
+  const activeRowId = flat.length > 0 ? `${listId}-${highlightIndex}` : undefined;
 
   return (
     <div
@@ -160,17 +180,20 @@ export function GlobalSearch() {
       </button>
 
       <Input
+        role="combobox"
         aria-label="Search Mirage"
+        aria-expanded={panelOpen}
+        aria-controls={listId}
+        aria-activedescendant={activeRowId}
         placeholder="Search projects, endpoints, cases…"
         value={rawQuery}
         onChange={(e) => setRawQuery(e.target.value)}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
         onKeyDown={onKeyDown}
       />
 
       {panelOpen && (
-        <div className={styles.searchPanel}>
+        <div className={styles.searchPanel} role="listbox" id={listId}>
           {flat.length === 0 ? (
             <div className={styles.searchEmpty}>No matches</div>
           ) : (
@@ -183,12 +206,14 @@ export function GlobalSearch() {
                     <button
                       key={item.href}
                       type="button"
+                      role="option"
+                      id={`${listId}-${i}`}
+                      aria-selected={i === highlightIndex}
                       className={
                         i === highlightIndex
                           ? `${styles.searchRow} ${styles.searchRowActive}`
                           : styles.searchRow
                       }
-                      onMouseDown={(e) => e.preventDefault()}
                       onMouseEnter={() => setHighlightIndex(i)}
                       onClick={() => go(item.href)}
                     >
