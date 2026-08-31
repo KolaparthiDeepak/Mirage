@@ -29,6 +29,7 @@ export function CaseList({
 
   return (
     <div role="listbox" aria-label="Cases" className={styles.list} onKeyDown={onKeyDown}>
+      {/* ponytail: linear render — card-block-lost has <40 cases; add windowing only past ~200 rows. */}
       {cases.map((c, i) => (
         <CaseRow
           key={c.id}

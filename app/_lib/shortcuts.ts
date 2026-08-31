@@ -42,9 +42,6 @@ export function useShortcuts(map: ShortcutMap): void {
       const el = document.activeElement;
       const typing =
         !!el &&
-        // a field inside a hidden subtree can't actually be typed into (browsers
-        // won't focus it; jsdom's autoFocus does) — don't let it swallow shortcuts
-        !el.closest("[hidden]") &&
         (el.tagName === "INPUT" ||
           el.tagName === "TEXTAREA" ||
           (el as HTMLElement).isContentEditable);

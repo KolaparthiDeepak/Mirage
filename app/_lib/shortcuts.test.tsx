@@ -19,6 +19,7 @@ describe("matchCombo", () => {
   });
   it("returns null when Alt is the only modifier", () => {
     expect(matchCombo({ altKey: true, key: "k" })).toBeNull();
+    expect(matchCombo({ altKey: true, key: "e" })).toBeNull();
   });
   it("maps mod+enter", () => {
     expect(matchCombo({ metaKey: true, key: "Enter" })).toBe("mod+enter");

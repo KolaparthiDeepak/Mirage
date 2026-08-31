@@ -40,7 +40,7 @@ export function GeneralTab({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-        <span className={styles.help}>shown in the UI only</span>
+        <span className={styles.help}>Display only — not written to project.yaml</span>
       </label>
 
       <label className={styles.field}>

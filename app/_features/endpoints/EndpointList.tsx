@@ -29,6 +29,7 @@ export function EndpointList({
 
   return (
     <div role="listbox" aria-label="Endpoints" className={styles.list} onKeyDown={onKeyDown}>
+      {/* ponytail: linear render — card-block-lost has <40 cases; add windowing only past ~200 rows. */}
       {endpoints.map((e, i) => (
         <EndpointRow
           key={e.key}

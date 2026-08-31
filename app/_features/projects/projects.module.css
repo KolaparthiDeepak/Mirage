@@ -27,11 +27,6 @@
   color: var(--text-muted);
 }
 
-.disabledBtn {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .noMatch {
   color: var(--text-secondary);
   font-size: 13px;
