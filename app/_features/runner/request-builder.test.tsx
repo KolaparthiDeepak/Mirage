@@ -27,11 +27,19 @@ const renderT = (ui: React.ReactElement) =>
     </PreviewProvider>,
   );
 
-function EnvProbe({ to }: { to: string }) {
+function EnvProbe({ id, name, baseUrl }: { id: string; name: string; baseUrl: string }) {
   const { set } = usePreview();
   return (
-    <button onClick={() => set((s) => ({ ...s, activeEnvId: to }))}>
-      env-{to}
+    <button
+      onClick={() =>
+        set((s) => ({
+          ...s,
+          environments: [...s.environments, { id, name, baseUrl }],
+          activeEnvId: id,
+        }))
+      }
+    >
+      env-{id}
     </button>
   );
 }
@@ -159,7 +167,7 @@ describe("RequestBuilder × active environment", () => {
     render(
       <PreviewProvider>
         <ToastProvider>
-          <EnvProbe to="qa" />
+          <EnvProbe id="qa" name="QA" baseUrl="https://qa.mockservers.dailyuze.com" />
           <RequestBuilder case_={envFixture} />
         </ToastProvider>
       </PreviewProvider>,

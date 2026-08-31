@@ -19,17 +19,22 @@ function renderList() {
 const rowFor = (name: string) => screen.getByRole("button", { name: new RegExp(name) });
 
 describe("EnvironmentList", () => {
-  it("renders the 4 seeded environments with Local active", () => {
+  it("seeds only the Local environment, active", () => {
     renderList();
-    for (const n of ["Local", "Development", "QA", "Production"]) {
-      expect(rowFor(n)).toBeDefined();
-    }
+    expect(rowFor("Local")).toBeDefined();
     expect(within(rowFor("Local")).getByText("Active")).toBeDefined();
-    expect(within(rowFor("QA")).queryByText("Active")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Development|Production/ })).toBeNull();
   });
 
-  it("moves the Active badge when a non-active row is clicked", () => {
+  it("moves the Active badge when a newly added row is clicked", () => {
     renderList();
+    fireEvent.click(screen.getByRole("button", { name: "Add environment" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "QA" } });
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://qa.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
     fireEvent.click(rowFor("QA"));
     expect(within(rowFor("QA")).getByText("Active")).toBeDefined();
     expect(within(rowFor("Local")).queryByText("Active")).toBeNull();

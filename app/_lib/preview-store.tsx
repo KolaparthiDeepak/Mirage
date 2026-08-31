@@ -16,12 +16,10 @@ export interface PreviewState {
   rulesDraft: Record<string, DraftRule[]>;
 }
 
-export const SEED_ENVIRONMENTS: Env[] = [
-  { id: "local", name: "Local", baseUrl: "" },
-  { id: "dev", name: "Development", baseUrl: "https://dev.mockservers.dailyuze.com" },
-  { id: "qa", name: "QA", baseUrl: "https://qa.mockservers.dailyuze.com" },
-  { id: "prod", name: "Production", baseUrl: "https://mockservers.dailyuze.com" },
-];
+// Seed only Local — the other hosts don't exist, and Execute would POST the
+// user's typed headers there. Users add real environments via the (validated)
+// "Add environment" modal.
+export const SEED_ENVIRONMENTS: Env[] = [{ id: "local", name: "Local", baseUrl: "" }];
 
 const KEY = "mockservers-preview";
 

@@ -22,11 +22,19 @@ afterEach(() => {
   else delete (navigator as { clipboard?: unknown }).clipboard;
 });
 
-function EnvProbe({ to }: { to: string }) {
+function EnvProbe({ id, name, baseUrl }: { id: string; name: string; baseUrl: string }) {
   const { set } = usePreview();
   return (
-    <button onClick={() => set((s) => ({ ...s, activeEnvId: to }))}>
-      env-{to}
+    <button
+      onClick={() =>
+        set((s) => ({
+          ...s,
+          environments: [...s.environments, { id, name, baseUrl }],
+          activeEnvId: id,
+        }))
+      }
+    >
+      env-{id}
     </button>
   );
 }
@@ -43,7 +51,7 @@ function renderGen(props: Partial<Parameters<typeof CodeGenerator>[0]> = {}) {
   return render(
     <PreviewProvider>
       <ToastProvider>
-        <EnvProbe to="qa" />
+        <EnvProbe id="qa" name="QA" baseUrl="https://qa.mockservers.dailyuze.com" />
         <CodeGenerator draft={draft} {...props} />
       </ToastProvider>
     </PreviewProvider>,
