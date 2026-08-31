@@ -90,6 +90,18 @@ describe("Cases page", () => {
     renderPage();
     expect(screen.getByText("generated")).toBeDefined();
   });
+
+  it("clicking a case row shows its CaseDetail in the rail", () => {
+    renderPage();
+    expect(screen.queryByText("Expected status")).toBeNull();
+
+    fireEvent.click(screen.getByText("c3").closest("[role=option]")!);
+
+    expect(screen.getByText("Expected status")).toBeDefined();
+    expect(screen.getByText("Expected body")).toBeDefined();
+    // c3 expects a 404 — shown in the row and again in the detail rail.
+    expect(screen.getAllByText("404").length).toBeGreaterThan(1);
+  });
 });
 
 describe("CaseList keyboard nav", () => {

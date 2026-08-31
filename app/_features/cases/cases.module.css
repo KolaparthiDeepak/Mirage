@@ -102,6 +102,31 @@
   color: var(--text-muted);
 }
 
+.casesLayout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.rail {
+  position: sticky;
+  top: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+@media (max-width: 960px) {
+  .casesLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    position: static;
+  }
+}
+
 .detail {
   display: flex;
   flex-direction: column;
