@@ -38,7 +38,6 @@ export function ProjectCard({ project }: { project: ProjectVM }) {
       </div>
 
       <div className={styles.cardServer}>
-        <span className={styles.metaLabel}>Mock server</span>
         <Link href={href} className={styles.baseUrl}>
           {baseUrl}
         </Link>

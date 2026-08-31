@@ -10,6 +10,7 @@ import {
 import { PreviewProvider } from "@/app/_lib/preview-store";
 import { ToastProvider } from "@/app/_ui";
 import { AppShell } from "@/app/_shell/AppShell";
+import { IntroSplash } from "@/app/_shell/IntroSplash";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const bundle = bundleJson as unknown as CompiledBundle;
@@ -27,6 +28,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   );
   return (
     <ViewModelProvider model={model}>
+      <IntroSplash />
       <ProjectConfigProvider configs={configs}>
         <PreviewProvider>
           <ToastProvider>

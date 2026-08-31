@@ -33,6 +33,14 @@ describe("Projects page", () => {
     expect(screen.getByText("Beta Service")).toBeDefined();
   });
 
+  it("shows the sharpened page description and no 'Mock server' label", () => {
+    renderPage();
+    expect(
+      screen.getByText("Simulate any API. Steer every branch. No backend required."),
+    ).toBeDefined();
+    expect(screen.queryByText("Mock server")).toBeNull();
+  });
+
   it("shows the empty state with no projects", () => {
     renderPage({ ...(model as object), projects: [] });
     expect(screen.getByText(/workspace is empty/i)).toBeDefined();
@@ -47,9 +55,9 @@ describe("Projects page", () => {
 
   it("switches to list view and drops the card-only chrome", () => {
     renderPage();
-    expect(screen.getAllByText("Mock server").length).toBe(2);
+    expect(screen.getAllByText("Open").length).toBe(2);
     fireEvent.click(screen.getByRole("tab", { name: "List" }));
-    expect(screen.queryByText("Mock server")).toBeNull();
+    expect(screen.queryByText("Open")).toBeNull();
     expect(screen.getByText("Alpha API")).toBeDefined();
   });
 

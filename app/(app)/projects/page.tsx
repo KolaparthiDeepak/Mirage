@@ -23,7 +23,7 @@ export default function ProjectsPage() {
   const header = (
     <PageHeader
       title="Your mock APIs"
-      description="Create, organize and run isolated mock APIs for development and testing."
+      description="Simulate any API. Steer every branch. No backend required."
       actions={
         <Button variant="primary" onClick={() => setCreateOpen(true)}>
           New Project
