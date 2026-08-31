@@ -1345,17 +1345,108 @@ export function useShortcuts(map: ShortcutMap): void
 
 ---
 
-# PHASE 4 — Traffic, Environments, Variables — all PREVIEW (task inventory)
+# PHASE 4 — Traffic, Environments, Variables — all PREVIEW
 
-- **T4.1 `sample-traffic.ts`** — deterministic ~40 `TrafficEntry { id: string; method: string; endpointKey: string; path: string; status: number; at: string; ms: number; reqHeaders: Record<string,string>; reqBody: string; resBody: string }` derived from real `card-block-lost` cases. Test: every entry references a real endpoint key.
-- **T4.2 `TrafficTable` + `TrafficRow`** — columns Method / Endpoint / Status / Time / Response; `<MethodPill>`, `<StatusCode>`, `tabular-nums`; row click selects. Test: renders rows; selection state.
-- **T4.3 `TrafficDrawer`** — right `<Drawer>`, table visible behind; sections Request headers / body, Response; `Replay request` -> navigate `/p/<slug>/endpoints?e=<key>&c=<id>` (hands off to the REAL runner). Test: `Esc` closes; Replay pushes the right route.
-- **T4.4 `p/[slug]/traffic/page.tsx` + `(app)/traffic/page.tsx`** — `<PreviewBadge>`, search / filter / export (export = download JSON of the sample data — real action, labeled). Test: page renders with badge.
-- **T4.5 `EnvironmentList` + `p/[slug]/environments/page.tsx`** — from `usePreview().state.environments`; select -> `set` `activeEnvId`; `Add environment` modal (real local add). `<PreviewBadge>`. Test: selecting updates the active env in the store.
-- **T4.6 `_lib/env-url.ts`** — `applyEnv(url: string, env: Env): string` replaces the origin of a URL with `env.baseUrl` (path + query intact); `stripEnv(url: string): string` sets origin back to `window.location.origin`. Pure. Test: `applyEnv` then `stripEnv` round-trips; query preserved.
-- **T4.7 wire `activeEnv` into `RequestBuilder`** — the pre-filled URL and the cURL string use `applyEnv`; the actual `fetch` still uses the field value. Test: changing active env rewrites the displayed URL only, not the fetch target.
-- **T4.8 `VariableTable` + `p/[slug]/variables/page.tsx`** — from `usePreview().state.variables`; add row; reveal toggle for masked values; scope `<Badge>`. `<PreviewBadge>`. Test: add persists to store; reveal toggles masking.
-- **Phase 4 exit:** all four pages functional as PREVIEW; state survives reload within the tab; nothing new hits the network; `npm run check` green.
+Base at Phase 4 start: `702d426`. 4 tasks (P4.1–P4.4). Same rules (test → fail → implement → `npm run check` EXIT 0 → `npm run build` EXIT 0 → commit; no `import React`; component tests `*.test.tsx` + `@testing-library/react` + `afterEach(cleanup)`; no hardcoded hex; no `git add -A`; Node v26; commit trailer). **Every page in this phase is PREVIEW** — `<PreviewBadge/>` on the header, state from `usePreview()` (`sessionStorage`-backed, from Phase 1), nothing new hits the network.
+
+### Reference
+- `@/app/_lib/preview-store` (Phase 1): `usePreview(): { state: PreviewState; set: (updater) => void; activeEnv: Env }`.
+  `PreviewState = { environments: Env[]; activeEnvId: string; variables: Variable[]; scenarios: Record<string, Scenario[]>; rulesDraft: Record<string, DraftRule[]> }`.
+  `Env = { id: string; name: string; baseUrl: string }` (seeded Local/Development/QA/Production). `Variable = { id: string; key: string; value: string; scope: "Global" | "Project" | "QA" | "Local" }`.
+- `@/app/_features/traffic/sample-traffic.ts` (built in P2.2): `TrafficEntry { id; method; endpointKey; path; status; at; ms; reqHeaders; reqBody; resBody }`, `sampleTraffic(project: ProjectVM): TrafficEntry[]` — currently capped at 12; P4.1 raises `MAX` and adds variety.
+- `@/app/_lib/nav` (Phase 3): `caseHref(slug, endpointKey, caseId)`, `endpointHref(slug, endpointKey)`.
+- Primitives: `@/app/_ui` (`Drawer`, `Modal`, `Button`, `Input`, `Select`, `Badge`, `MethodPill`, `StatusCode`, `JsonView`, `EmptyState`, `useToast`, `Tabs`). `@/app/_shell` (`PageHeader`, `PreviewBadge`).
+- Sidebar: `/traffic` (workspace) + project `Environments`/`Variables` still carry `soon: true` + a `TODO`. Drop each flag in the task that ships its page. Also: `CommandPalette.tsx` + `AppShell.tsx` have "Traffic coming soon" preview strings — P4.1 flips the palette's `go-traffic` command to a real `router.push("/traffic")` and drops its `preview` flag.
+
+---
+
+### P4.1: Traffic table + drawer + pages
+
+**Files:**
+- Modify `app/_features/traffic/sample-traffic.ts` — raise `MAX` to `30`, extend `AT` to 30 hardcoded decrementing strings (keep going below 10:31 into 10:2x/10:1x), keep 100% deterministic (NO `Math.random`/`Date`). Cycle `ms` through a small fixed set (`[8, 12, 18, 24, 31, 42, 9, 15]`). Populate `reqHeaders` with `{ "content-type": "application/json" }`, `reqBody` from the case's synthesized request body if available (`endpoint.cases[i]?.request.body ?? "{}"`), `resBody` from `JSON.stringify(case.expected.body ?? {})`.
+- Create `app/_features/traffic/TrafficTable.tsx`, `TrafficRow.tsx`, `TrafficDrawer.tsx`, `traffic.module.css`.
+- Create `app/(app)/p/[slug]/traffic/page.tsx` and `app/(app)/traffic/page.tsx`.
+- Modify `app/_shell/Sidebar.tsx` (drop `soon` on workspace `/traffic`) + `shell.test.tsx`; `app/_shell/CommandPalette.tsx` (make `go-traffic` real) + `command-palette.test.tsx`.
+
+**Interfaces:**
+- `TrafficRow`: `{ entry: TrafficEntry; selected?: boolean; onSelect?: () => void }` — a `<tr>` (or grid row): `<MethodPill method={entry.method}/>`, `commandCode(entry.path)` or `entry.path` (mono), `<StatusCode code={entry.status}/>`, `entry.at` (muted, `tabular-nums`), `{entry.ms} ms` (`tabular-nums`). Clickable, `aria-selected`.
+- `TrafficTable`: `{ entries: TrafficEntry[]; selectedId?: string | null; onSelect?: (id: string) => void }` — a `<table>` with a `<thead>` (Method / Endpoint / Status / Time / Response) and `TrafficRow`s. `overflow-x:auto` wrapper.
+- `TrafficDrawer`: `{ entry: TrafficEntry | null; project: ProjectVM; open: boolean; onClose: () => void }` — a right `<Drawer>` (table stays visible behind). Sections: method + path header, `<StatusCode>` + `{ms} ms`; "Request headers" (`<JsonView value={JSON.stringify(entry.reqHeaders, null, 2)}/>`), "Request body" (`<JsonView value={entry.reqBody}/>`), "Response" (`<JsonView value={entry.resBody}/>`). A `Replay request` `<Button variant="primary">` → resolve the entry's endpoint (`project.endpoints.find(e => e.key === entry.endpointKey)`) and its first case, `router.push(caseHref(project.slug, entry.endpointKey, firstCase.id))` — hands off to the REAL runner. `Esc` closes (Drawer already does).
+- `p/[slug]/traffic/page.tsx` (`"use client"`): `use(params)`, `useProject(slug)`. `<PageHeader title="Traffic" description="Sample request log — the mock backend does not record traffic yet." actions={<Export button + PreviewBadge>}/>`. A toolbar: search `<input>` (filter entries by path/method/status text, debounced), a method `<Select>` filter, an `Export` button that downloads a JSON blob of the current `sampleTraffic(project)` (real action on sample data — build a `Blob`, `URL.createObjectURL`, a temporary `<a download>` click; label it clearly). `<TrafficTable>` + `<TrafficDrawer>` wired to a `selectedId` state.
+- `(app)/traffic/page.tsx` (`"use client"`): the workspace-level (cross-project) view — `useViewModel()`, concat `sampleTraffic` across all projects, same table + drawer (drawer's Replay needs the entry's project — track it). `<PreviewBadge/>`.
+
+**Tests** (`app/_features/traffic/traffic.test.tsx` + `sample-traffic.test.ts` additions):
+- `sample-traffic`: with a fixture project → returns >12 and <=30 entries; still deterministic (deep-equal on two calls); every `endpointKey` real; no forbidden APIs (grep the source in the test or just assert determinism).
+- `TrafficTable`: renders a row per entry; clicking a row calls `onSelect` with its id.
+- `TrafficDrawer`: `open` + an entry → shows the response JSON; `Replay request` calls `router.push` with `caseHref(...)` (mock `next/navigation`).
+- Page: renders with a `PreviewBadge`; the `go-traffic` command palette test now expects a real `router.push("/traffic")` (no "coming soon" toast).
+
+**Commit** `feat(traffic): traffic table, detail drawer, and pages (preview)`.
+
+---
+
+### P4.2: `env-url` + Environments page
+
+**Files:** `app/_lib/env-url.ts`, `app/_lib/env-url.test.ts` (node); `app/_features/environments/EnvironmentList.tsx`, `AddEnvironmentModal.tsx`, `environments.module.css`; `app/(app)/p/[slug]/environments/page.tsx`; modify `app/_shell/Sidebar.tsx` (drop `soon` on project Environments) + `shell.test.tsx`.
+
+**Interfaces:**
+- `env-url.ts`:
+  ```ts
+  export function applyEnv(url: string, env: { baseUrl: string }): string
+  export function stripEnv(url: string, localOrigin: string): string
+  ```
+  `applyEnv`: if `url` is absolute (`^https?://`), replace its origin with `env.baseUrl` (trim a trailing `/` off `env.baseUrl`), keep path + search + hash. If `url` is relative (`/m/...`), prefix `env.baseUrl`. Pure.
+  `stripEnv`: inverse — if `url` starts with a known `baseUrl`-looking origin, replace with `localOrigin`; else if relative, prefix `localOrigin`. (Accept `localOrigin` as an arg so it's testable without `window`.)
+  Test: `applyEnv("/m/x?q=1", {baseUrl:"https://qa.example.com/"})` → `"https://qa.example.com/m/x?q=1"`; `applyEnv("http://localhost:3000/m/x", {baseUrl:"https://qa.example.com"})` → `"https://qa.example.com/m/x"`; round-trip `stripEnv(applyEnv(u, env), "http://localhost:3000")` preserves path+query.
+- `EnvironmentList`: `{}` — reads `usePreview().state.environments` + `activeEnvId`; each row: a radio-ish selectable row (name, mono `baseUrl`, an "active" `<Badge tone="success">` on the current one). Selecting → `set(s => ({ ...s, activeEnvId: id }))`. An "Add environment" button opens `AddEnvironmentModal`.
+- `AddEnvironmentModal`: `{ open; onClose }` — `<Modal>` with Name + Base URL `<Input>`s; "Add" → `set(s => ({ ...s, environments: [...s.environments, { id: crypto.randomUUID?.() ?? String(Date.now()), name, baseUrl }] }))` then `onClose`. (Local add is real within the preview store.)
+- Page: `<PageHeader title="Environments" description="..." actions={<PreviewBadge/>}/>` + `<EnvironmentList/>`.
+
+**Tests** (`app/_features/environments/environments.test.tsx`): render inside `<PreviewProvider>` — the 4 seeded envs render; clicking a non-active row makes it active (`Badge` moves); the Add modal appends an env that then appears in the list + survives a re-render.
+
+**Commit** `feat(environments): environments page + env-url helper (preview)`.
+
+---
+
+### P4.3: wire `activeEnv` into the runner (display only)
+
+**Files:** modify `app/_features/runner/RequestBuilder.tsx`, `app/_features/runner/CodeGenerator.tsx`; extend a runner test.
+
+**Behavior:**
+- `RequestBuilder`: `const { activeEnv } = usePreview()`. The URL `<input>`'s **displayed / pre-filled** value becomes `applyEnv(draft.url, activeEnv)` (when `activeEnv` is the seeded "Local" whose `baseUrl` is `http://localhost:3000`, this is effectively a no-op for a relative `/m/...` draft — fine). Track the URL in state as before; re-seed it from `applyEnv(draft.url, activeEnv)` when `activeEnv.id` changes (a `useEffect` on `activeEnv.id` that resets `url` to the env-applied form — but ONLY if the user hasn't hand-edited it; simplest acceptable: reset on env change unconditionally and accept that it discards a manual edit, with a code comment).
+- **The actual `fetch` still uses the `url` state value as-is** — do NOT re-strip or re-apply at execute time. If the user picks "Production" and hits Execute, the fetch goes to the production URL and most likely fails at the network layer — that is the honest behavior (design doc §7). Add a code comment saying so.
+- `CodeGenerator`: the cURL already contains `$ORIGIN`; when `activeEnv` is not Local, the resolved cURL should use `activeEnv.baseUrl` instead of `window.location.origin`. Pass `activeEnv` in (or read `usePreview` in `CodeGenerator`) and resolve `$ORIGIN` → `activeEnv.baseUrl` when it's set to a non-local env, else `window.location.origin`.
+- A small `<Badge>` or muted label in the RequestBuilder showing the active env name when it's not "Local", so the user knows the URL was rewritten.
+
+**Test:** render `<RequestBuilder case_={fixture}/>` inside `<PreviewProvider>`; assert the URL input shows the local form initially; then (drive the preview store to a QA env — render a helper that calls `set`) assert the URL input now shows the `qa.` host; assert `fetch` (mocked) is still called with whatever's in the input, not re-transformed.
+
+**Commit** `feat(runner): reflect the active environment in the URL and cURL (preview)`.
+
+---
+
+### P4.4: Variables page
+
+**Files:** `app/_features/variables/VariableTable.tsx`, `AddVariableModal.tsx`, `variables.module.css`; `app/(app)/p/[slug]/variables/page.tsx`; modify `app/_shell/Sidebar.tsx` (drop `soon` on project Variables) + `shell.test.tsx`.
+
+**Interfaces:**
+- `VariableTable`: `{}` — reads `usePreview().state.variables`. A `<table>`: Variable (key, mono) / Value / Scope (`<Badge>`). Value cell: if the key looks secret (`/(key|secret|token|password|pwd)/i` on the key) OR always, render masked (`••••••••`) with a "Reveal"/"Hide" toggle button per row (`useState` set of revealed ids). A per-row delete (`set` removes it). An "Add variable" button → `AddVariableModal`.
+- `AddVariableModal`: `{ open; onClose }` — `<Modal>` Name + Value `<Input>`s + Scope `<Select>` (Global / Project / QA / Local); "Add" → `set(s => ({ ...s, variables: [...s.variables, { id, key, value, scope }] }))`.
+- Page: `<PageHeader title="Variables" description="Local substitution only — never sent to the backend." actions={<PreviewBadge/>}/>` + `<VariableTable/>`. (No runner wiring for variables in this phase — just the CRUD surface. A `// TODO(later): substitute {{VAR}} into request drafts` comment.)
+
+**Tests** (`app/_features/variables/variables.test.tsx`, inside `<PreviewProvider>`): Add modal appends a variable that appears in the table + survives re-render; a secret-looking key renders masked; clicking Reveal shows the value; delete removes the row.
+
+**Commit** `feat(variables): variables page (preview)`.
+
+---
+
+### Phase 4 exit criteria
+- `/traffic`, `/p/<slug>/traffic`, `/p/<slug>/environments`, `/p/<slug>/variables` all render as PREVIEW pages with a `<PreviewBadge/>`.
+- Traffic drawer's "Replay request" deep-links into the real workspace runner.
+- Environment selection persists (sessionStorage); the runner URL + cURL reflect the active env; the actual `fetch` is unchanged (honest failure off-local).
+- Variables CRUD persists; secrets mask + reveal.
+- Sidebar `soon` flags dropped for `/traffic` + project Environments + Variables; the command palette's `go-traffic` is a real navigation.
+- Nothing new hits the network. `npm run check` + `npm run build` green.
+- Final Phase 4 whole-branch review (opus) before Phase 5.
 
 ---
 
