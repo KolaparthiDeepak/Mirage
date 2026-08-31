@@ -43,8 +43,9 @@ export function CaseRow({
       <StatusCode code={case_.expected.status} />
       <span className={styles.overflow} onClick={(e) => e.stopPropagation()}>
         <Dropdown
-          trigger={<span aria-label="Case actions">⋯</span>}
+          trigger={<span aria-label="Case actions (preview)">⋯</span>}
           items={[
+            { label: "Preview — edit cases in the repo", onSelect() {}, disabled: true },
             { label: "Duplicate", onSelect() {}, disabled: true },
             { label: "Edit", onSelect() {}, disabled: true },
             { label: "Delete", onSelect() {}, disabled: true },

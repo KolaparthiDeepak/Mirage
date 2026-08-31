@@ -118,6 +118,12 @@ describe("CaseRow truncation", () => {
     expect(screen.getByText("500")).toBeDefined();
   });
 
+  it("badges the row overflow menu as preview", () => {
+    render(<CaseRow case_={mk("c1")} />);
+    fireEvent.click(screen.getByRole("button", { name: "Case actions (preview)" }));
+    expect(screen.getByText("Preview — edit cases in the repo")).toBeDefined();
+  });
+
   it(".label carries the ellipsis rule in the CSS module", () => {
     const css = readFileSync(
       join(process.cwd(), "app/_features/cases/cases.module.css"),
