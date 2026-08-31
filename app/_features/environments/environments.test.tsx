@@ -53,4 +53,28 @@ describe("EnvironmentList", () => {
     );
     expect(rowFor("Staging")).toBeDefined();
   });
+
+  it("rejects an invalid Base URL and accepts a valid one", () => {
+    renderList();
+    const open = () =>
+      fireEvent.click(screen.getByRole("button", { name: "Add environment" }));
+
+    for (const bad of ["ht!tp://x", "javascript:alert(1)", 'https://x"']) {
+      open();
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "E" } });
+      fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: bad } });
+      fireEvent.click(screen.getByRole("button", { name: "Add" }));
+      expect(screen.getByText("Enter a valid http(s) URL")).toBeDefined();
+      expect(screen.queryByRole("button", { name: /^E/ })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    }
+
+    open();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Good" } });
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://good.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(rowFor("Good")).toBeDefined();
+  });
 });

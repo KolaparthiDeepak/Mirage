@@ -8,8 +8,20 @@ export function AddEnvironmentModal({ open, onClose }: { open: boolean; onClose:
   const { set } = usePreview();
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   function add() {
+    const trimmed = baseUrl.trim();
+    try {
+      const u = new URL(trimmed);
+      if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error();
+      // The value is spliced into a copy-to-clipboard `curl "..."` command;
+      // quotes / whitespace / `$` / backticks would break out of the quoting.
+      if (/["'`$\s\\]/.test(trimmed)) throw new Error();
+    } catch {
+      setError("Enter a valid http(s) URL");
+      return;
+    }
     set((s) => ({
       ...s,
       environments: [
@@ -17,18 +29,18 @@ export function AddEnvironmentModal({ open, onClose }: { open: boolean; onClose:
         {
           id: globalThis.crypto?.randomUUID?.() ?? `env-${s.environments.length}-${Date.now()}`,
           name: name.trim(),
-          baseUrl: baseUrl.trim(),
+          baseUrl: trimmed,
         },
       ],
     }));
     setName("");
     setBaseUrl("");
+    setError(null);
     onClose();
   }
 
   return (
     <Modal open={open} onClose={onClose} title="Add environment">
-      <h2 className={styles.modalTitle}>Add environment</h2>
       <div className={styles.form}>
         <label className={styles.field}>
           Name
@@ -40,9 +52,18 @@ export function AddEnvironmentModal({ open, onClose }: { open: boolean; onClose:
             mono
             placeholder="https://staging.example.com"
             value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
+            aria-invalid={error ? true : undefined}
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
+              if (error) setError(null);
+            }}
           />
         </label>
+        {error ? (
+          <span role="alert" className={styles.error}>
+            {error}
+          </span>
+        ) : null}
         <div className={styles.actions}>
           <Button variant="ghost" onClick={onClose}>
             Cancel

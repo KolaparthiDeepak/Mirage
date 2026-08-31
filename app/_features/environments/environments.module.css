@@ -48,10 +48,9 @@
   flex: 1;
 }
 
-.modalTitle {
-  margin: 0 0 var(--space-4);
-  font-size: 15px;
-  color: var(--text);
+.error {
+  color: var(--error);
+  font-size: 12px;
 }
 
 .form {
