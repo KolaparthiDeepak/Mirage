@@ -1238,14 +1238,110 @@ Old `reset()` behaviour: restore `method/url/headersText/body` from `case_.reque
 
 ---
 
-# PHASE 3 — Command palette, global search, shortcuts, polish (task inventory)
+# PHASE 3 — Command palette, global search, shortcuts, polish
 
-- **T3.1 `_lib/search.ts` `searchViewModel(model, query)`** -> `{ projects: ProjectVM[]; endpoints: { project: ProjectVM; endpoint: EndpointVM }[]; cases: { project: ProjectVM; endpoint: EndpointVM; case: CaseVM }[] }`, case-insensitive substring on name / path / id, capped 8 per group, `[]` for empty query. Test: fixture model -> expected groups.
-- **T3.2 `GlobalSearch`** — input + grouped results; `Enter` navigates (project -> `/p/<slug>`, endpoint -> `/p/<slug>/endpoints?e=<key>`, case -> `+&c=<id>`). Test: query renders groups; selection pushes the right route.
-- **T3.3 `CommandPalette`** — `role="dialog"`, focus trap, global `⌘K` / `Ctrl K` listener in `AppShell`, `Esc` closes. Contextual commands — always: Toggle theme, Open Projects / Endpoints / Traffic, Switch project. In a project: Copy mock URL (real), Copy cURL (real, when a case is active), Run selected case (real), New endpoint / case (preview, tagged). Inline search results from T3.1. Test: filter matches a command; real command fires its handler; preview command shows the tag; `⌘K` opens.
-- **T3.4 `_lib/shortcuts.ts`** — `⌘K`, `⌘P` (switcher), `⌘E` (new endpoint -> preview toast), `⌘Enter` (execute), `⌘S` (save case -> preview toast), `⌘⇧C` (copy cURL), `Esc` (close overlay). Suppressed while typing in an input except body editor + `⌘Enter`. Ctrl equivalents on non-Mac. Test: synthetic keydown fires the mapped action; typing in `<input>` suppresses non-exempt shortcuts.
-- **T3.5 polish** — `Skeleton` on route transitions; `Toast` on copy / preview actions; `EmptyState` variants; error boundary in `(app)/layout.tsx`. Test: error boundary renders a fallback on a thrown child.
-- **Phase 3 exit:** `⌘K` everywhere; search finds projects / endpoints / cases; shortcuts per source spec §25; `npm run check` green.
+Base at Phase 3 start: `334ef52`. 5 tasks (P3.1–P3.5). Rules as Phase 2 (test → fail → implement → `npm run check` EXIT 0 → `npm run build` EXIT 0 → commit; no `import React`; component tests `*.test.tsx` + `@testing-library/react` + `afterEach(cleanup)`; no hardcoded hex; no `git add -A`; Node v26; commit trailer `Claude-Session: https://claude.ai/code/session_01MuK2fgcpXNhze3JYKrBSo5`).
+
+### Reference (unchanged from Phase 2)
+`ViewModel = { build; projects: ProjectVM[] }`. `ProjectVM = { slug; name; basePath?; endpoints: EndpointVM[]; caseCount }`. `EndpointVM = { key; method; path; runUrl; summary?; cases: CaseVM[] }` (`key` = `` `${method} ${path}` ``). `CaseVM = { id; label; isOpenApiGenerated; match; expected; request }`.
+Helpers: `@/app/_lib/view-model-context` (`useViewModel`), `@/app/_lib/endpoint-label` (`commandCode`), `@/app/_lib/theme` (`toggleTheme`), `@/app/_lib/mock-url` (`mockBaseUrl`), `@/app/_lib/use-debounced`. Primitives: `@/app/_ui` (`Modal`, `Tabs`, `Kbd`, `Badge`, `Input`, `EmptyState`, `Skeleton`, `MethodPill`, `StatusCode`, `useToast`, `CopyButton`). `@/app/_shell` (`PreviewBadge`).
+Deep-link an endpoint via `/p/<slug>/endpoints?e=<encodeURIComponent(key)>`, a case via `&c=<id>`.
+
+---
+
+### P3.1: `app/_lib/search.ts` — `searchViewModel`
+
+**Files:** `app/_lib/search.ts`, `app/_lib/search.test.ts` (node).
+**Produces:**
+```ts
+export interface SearchResults {
+  projects: ProjectVM[];
+  endpoints: { project: ProjectVM; endpoint: EndpointVM }[];
+  cases: { project: ProjectVM; endpoint: EndpointVM; case: CaseVM }[];
+}
+export function searchViewModel(model: ViewModel, query: string): SearchResults
+```
+- `query.trim() === ""` -> all three arrays empty.
+- Case-insensitive substring. Projects: `name` or `slug`. Endpoints: `commandCode(path)`, `path`, `summary`, or `method`. Cases: `case.label` or `case.id`.
+- Cap each array at 8. Pure, deterministic, no React.
+
+- [ ] Test: fixture ViewModel (2 projects, several endpoints/cases). `""` -> all empty. `"card"` -> matches. >8 cases matching -> exactly 8. Endpoint match by method (`"post"`). Case match by id.
+- [ ] Implement. `npm run check` + `npm run build` green. Commit `feat(search): searchViewModel over the ViewModel`.
+
+---
+
+### P3.2: `GlobalSearch` component + TopBar slot
+
+**Files:** `app/_shell/GlobalSearch.tsx`, extend `app/_shell/shell.module.css`; modify `app/_shell/TopBar.tsx`; `app/_shell/global-search.test.tsx`.
+**Produces:** `<GlobalSearch/>` — a compact search affordance in the TopBar. On input calls `searchViewModel(useViewModel(), q)` (debounced 120ms), renders grouped results (`Projects` / `Endpoints` / `Cases`), keyboard: ArrowUp/Down move a highlighted row, `Enter` navigates, `Esc` closes/clears. `useRouter().push`:
+- project -> `/p/${slug}`
+- endpoint -> `/p/${slug}/endpoints?e=${encodeURIComponent(endpoint.key)}`
+- case -> `/p/${slug}/endpoints?e=${encodeURIComponent(endpoint.key)}&c=${case.id}`
+Rows: `MethodPill` + `commandCode` (endpoints), `StatusCode` + label (cases), cube glyph + name (projects).
+**TopBar:** render `<GlobalSearch/>` between the ProjectSwitcher area and the `⌘K` hint; collapses to an icon button on narrow widths (CSS).
+
+- [ ] Test (mock `next/navigation`, wrap in `ViewModelProvider`): typing "card" renders a Projects group; Enter on a highlighted endpoint result calls `router.push` with the encoded `?e=` URL; `Esc` clears.
+- [ ] Implement. check + build green. Commit `feat(shell): global search in the top bar`.
+
+---
+
+### P3.3: `CommandPalette` + `⌘K` + contextual commands
+
+**Files:** `app/_shell/CommandPalette.tsx`, `app/_shell/command-palette.test.tsx`, extend `shell.module.css`; modify `app/_shell/AppShell.tsx` (mount + `⌘K` listener) and `app/_shell/TopBar.tsx` (the `⌘K` Kbd becomes a button that opens it).
+**Produces:** `<CommandPalette open onClose/>` on `<Modal>` (`role="dialog"`, focus trap, `Esc`). Search `<input autofocus>` + filtered command list + inline `searchViewModel` results.
+- `{ id: string; label: string; hint?: string; preview?: boolean; run: () => void }`.
+- Contextual on `usePathname()`:
+  - Always: **Toggle theme** (`toggleTheme`), **Go to Projects** (`push("/projects")`), **Go to Endpoints** (`preview` — `/endpoints` still `soon`), **Go to Traffic** (`preview`).
+  - In a project: **Copy mock base URL** (`navigator.clipboard.writeText(mockBaseUrl(slug, project.basePath))` — real, toast on done), **Open Overview / Endpoints / Cases** (real `push`), **New endpoint** / **New case** (`preview` — toast "Preview — add via the repo").
+  - With `?c=` set: **Run selected case** (`preview` — toast "Focus the workspace, press ⌘↵"), **Copy cURL for selected case** (real — `writeText` of `selectedCase.request.curl` with `$ORIGIN` -> `window.location.origin`; toast).
+- `preview` rows show `<Badge tone="warning">Preview</Badge>` and still run their toast handler — never silent.
+- Arrow keys + Enter; Enter runs the highlighted item then closes.
+**AppShell:** `useState(paletteOpen)`; `useEffect` window keydown: `(e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"` -> `preventDefault()` + open. Render `<CommandPalette open={paletteOpen} .../>`. Close on `pathname` change.
+
+- [ ] Test: render `<CommandPalette open onClose/>` in providers + mocked `next/navigation` (`usePathname` -> `/p/card-block-lost`). "Toggle theme" row exists and clicking it toggles (mock `@/app/_lib/theme`); typing "endpoint" filters; a `preview` command shows the badge; in `AppShell`, dispatching a `KeyboardEvent` with `metaKey`+`k` opens the dialog.
+- [ ] Implement. check + build green. Commit `feat(shell): command palette (⌘K)`.
+
+---
+
+### P3.4: `app/_lib/shortcuts.ts` + wiring
+
+**Files:** `app/_lib/shortcuts.ts`, `app/_lib/shortcuts.test.ts`; modify `app/_shell/AppShell.tsx`.
+**Produces:**
+```ts
+export interface ShortcutMap { [combo: string]: () => void }
+export function matchCombo(e: KeyboardEvent | { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; key: string }): string | null
+export function useShortcuts(map: ShortcutMap): void
+```
+- `matchCombo`: `mod` = `metaKey || ctrlKey`; include `shift`; key lowercased; `Escape` -> `"esc"`, `Enter` -> `"enter"`. E.g. `"mod+k"`, `"mod+shift+c"`, `"mod+p"`, `"mod+e"`, `"mod+s"`, `"esc"`. Return `null` when no `mod` and not `esc`.
+- `useShortcuts`: `window` keydown listener; on match call `map[combo]?.()` + `preventDefault()` (not for `esc`). Skip when `document.activeElement` is `<input>`/`<textarea>`/`[contenteditable]` UNLESS combo ∈ `ALWAYS_ALLOWED = ["mod+enter","esc"]`.
+**Wiring in `AppShell`:** `useShortcuts({ "mod+k": openPalette, "mod+p": () => openPalettePrefiltered("switch project") /* or just openPalette */, "mod+e": () => toast("Preview — add endpoints via the repo"), "mod+s": () => toast("Preview — cases are defined in the repo"), "esc": closeOverlays })`. `mod+enter` (execute) and `mod+shift+c` (copy cURL) stay owned by `RequestBuilder`/`EndpointWorkspace` from Phase 2 — do NOT duplicate; add a code comment noting where they live.
+
+- [ ] Test (`shortcuts.test.ts`): `matchCombo({metaKey:true,key:"k"})` -> `"mod+k"`; `{ctrlKey:true,shiftKey:true,key:"C"}` -> `"mod+shift+c"`; `{key:"Escape"}` -> `"esc"`; `{key:"a"}` -> `null`. `useShortcuts` probe: `mod+k` keydown on `window` -> handler called; `mod+e` while an `<input>` is focused -> NOT called; `mod+enter` while an `<input>` is focused -> called.
+- [ ] Implement. check + build green. Commit `feat(shortcuts): global keyboard shortcuts`.
+
+---
+
+### P3.5: polish — error boundary, loading, empty/toast audit
+
+**Files:** `app/(app)/error.tsx`, `app/(app)/loading.tsx`, `app/_shell/AppError.tsx`, `app/_shell/app-error.test.tsx`; light touches to feature pages.
+**Produces:**
+- `app/(app)/error.tsx` (`"use client"`, Next convention `{ error: Error & { digest?: string }; reset: () => void }`) -> `<AppError error={error} reset={reset}/>` — a calm centered panel: "Something went off-script." + `error.message` (mono, muted) + "Try again" `<Button onClick={reset}>` + a "Back to projects" `<Link>`. Tokens only; no stack dump.
+- `app/(app)/loading.tsx` -> a few `<Skeleton>` bars matching the main-column rhythm. Minimal.
+- Audit: the CommandPalette copy commands and any preview buttons produce a `useToast` confirmation; `/projects` and each list page render an `<EmptyState>` (not a blank div) — verify + fill gaps only.
+
+- [ ] Test (`app-error.test.tsx`): render `<AppError error={new Error("boom")} reset={spy}/>` -> shows "boom"; clicking "Try again" calls `reset`.
+- [ ] Implement. `npm run check` + `npm run build` green (Next auto-detects `error.tsx`/`loading.tsx`). Commit `feat(app): route error boundary + loading skeleton + polish`.
+
+---
+
+### Phase 3 exit criteria
+- `⌘K` opens the command palette anywhere in `(app)`; `Esc` closes it.
+- TopBar global search finds projects / endpoints / cases and navigates (deep-linked, encoded).
+- Shortcuts per source spec §25 where practical (`⌘K`, `⌘P`, `⌘E`, `⌘↵`, `⌘S`, `⌘⇧C`, `Esc`), suppressed in text inputs except `⌘↵`.
+- A thrown error in any `(app)` page shows the calm boundary, not a white screen; route transitions show a skeleton.
+- Preview commands are badged and toast — never silent.
+- `npm run check` + `npm run build` green.
+- Final Phase 3 whole-branch review (opus) before Phase 4.
 
 ---
 
