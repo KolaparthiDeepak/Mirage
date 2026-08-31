@@ -8,11 +8,6 @@ export function prettyBody(text: string): string {
   }
 }
 
-export function renderCurl(curl: string): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "$ORIGIN";
-  return curl.split("$ORIGIN").join(origin);
-}
-
 export type VerdictKind = "hit" | "divert" | "nomatch" | "unknown";
 
 export function verdictText(v: Verdict): { text: string; kind: VerdictKind } {

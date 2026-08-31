@@ -2,6 +2,7 @@ import { render, screen, fireEvent, cleanup, within } from "@testing-library/rea
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { ProjectVM } from "@/src/viewer/model";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
+import { ToastProvider } from "@/app/_ui";
 import { EndpointWorkspace } from "./EndpointWorkspace";
 import EndpointsPage from "@/app/(app)/p/[slug]/endpoints/page";
 
@@ -73,7 +74,11 @@ afterEach(() => {
 
 describe("EndpointWorkspace", () => {
   it("reflects ?e= / ?c= selection across the three columns", () => {
-    render(<EndpointWorkspace project={project} />);
+    render(
+      <ToastProvider>
+        <EndpointWorkspace project={project} />
+      </ToastProvider>,
+    );
 
     const lists = screen.getAllByRole("listbox");
     const endpointRow = within(lists[0]!).getByText("EP1").closest("[role=option]")!;
@@ -87,7 +92,11 @@ describe("EndpointWorkspace", () => {
   });
 
   it("selecting another endpoint replaces ?e= and clears ?c=", () => {
-    render(<EndpointWorkspace project={project} />);
+    render(
+      <ToastProvider>
+        <EndpointWorkspace project={project} />
+      </ToastProvider>,
+    );
     fireEvent.click(screen.getByText("EP2"));
     expect(nav.replace).toHaveBeenCalledTimes(1);
     const url = nav.replace.mock.calls[0]![0] as string;
@@ -97,7 +106,11 @@ describe("EndpointWorkspace", () => {
 
   it("shows an empty state when no case is selected", () => {
     nav.sp = new URLSearchParams("e=EP1");
-    render(<EndpointWorkspace project={project} />);
+    render(
+      <ToastProvider>
+        <EndpointWorkspace project={project} />
+      </ToastProvider>,
+    );
     expect(screen.getByText("Pick a case")).toBeDefined();
   });
 });

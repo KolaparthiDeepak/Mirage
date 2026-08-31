@@ -1,9 +1,8 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
-import { Button, Tabs } from "@/app/_ui";
+import { CopyButton, Tabs } from "@/app/_ui";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
-import { renderCurl } from "@/app/_lib/format";
 import type { RequestDraft } from "@/src/viewer/curl";
 import styles from "./runner.module.css";
 
@@ -23,28 +22,23 @@ export function CodeGenerator({
   copyCurlRef?: MutableRefObject<(() => void) | null>;
 }) {
   const [active, setActive] = useState("curl");
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  // Resolve $ORIGIN at click time (reads window.location.origin) — never in
-  // render, so the SSR/first paint stays stable. See plan P2.7 NOTE.
-  function copyCurl() {
-    navigator.clipboard?.writeText(renderCurl(draft.curl));
-    setCopied(true);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCopied(false), 1200);
-  }
+  // $ORIGIN resolves after mount so SSR and first client paint both emit the
+  // literal placeholder (hydration-safe); the block corrects itself next paint.
+  const [origin, setOrigin] = useState("$ORIGIN");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const resolvedCurl = draft.curl.split("$ORIGIN").join(origin);
 
   // Imperative handle for the ⌘⇧C shortcut wired in P2.8.
   useEffect(() => {
     if (!copyCurlRef) return;
-    copyCurlRef.current = copyCurl;
+    copyCurlRef.current = () => {
+      navigator.clipboard?.writeText(resolvedCurl).catch(() => {});
+    };
     return () => {
       copyCurlRef.current = null;
     };
-  });
+  }, [copyCurlRef, resolvedCurl]);
 
   const label = TABS.find((t) => t.id === active)?.label ?? "";
 
@@ -53,10 +47,8 @@ export function CodeGenerator({
       <Tabs tabs={TABS} active={active} onChange={setActive} />
       {active === "curl" ? (
         <div className={styles.codeRow}>
-          <pre className={styles.codeBlock}>{draft.curl}</pre>
-          <Button variant="ghost" size="sm" onClick={copyCurl}>
-            {copied ? "Copied" : "Copy"}
-          </Button>
+          <pre className={styles.codeBlock}>{resolvedCurl}</pre>
+          <CopyButton text={() => resolvedCurl} />
         </div>
       ) : (
         <div className={styles.soon}>
