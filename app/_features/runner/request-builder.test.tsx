@@ -33,11 +33,11 @@ const fixture: CaseVM = {
   },
 } as CaseVM;
 
-function okResponse() {
+function okResponse(headers?: Record<string, string>) {
   return {
     status: 200,
     text: () => Promise.resolve('{"ok":true}'),
-    headers: new Headers({ "content-type": "application/json" }),
+    headers: new Headers({ "content-type": "application/json", ...headers }),
   };
 }
 
@@ -57,6 +57,40 @@ describe("RequestBuilder", () => {
     expect(container.textContent).toContain('"ok": true');
     expect(onExecuted).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledOnce();
+
+    const [calledUrl, init] = fetchMock.mock.calls[0]!;
+    expect(calledUrl).toBe("http://localhost/m/demo/x");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe('{"a":1}');
+    expect(init.headers).toEqual({ "content-type": "application/json" });
+  });
+
+  it("omits the body for a GET (noBody rule)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    render(<RequestBuilder case_={fixture} />);
+
+    fireEvent.change(screen.getByLabelText("Request Method"), {
+      target: { value: "GET" },
+    });
+    fireEvent.click(screen.getByText("Execute"));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock.mock.calls[0]![1].method).toBe("GET");
+    expect(fetchMock.mock.calls[0]![1].body).toBeUndefined();
+  });
+
+  it("classifies a response whose x-mock-rule-id matches the case as a hit", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(okResponse({ "x-mock-rule-id": "case-1" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(<RequestBuilder case_={fixture} />);
+
+    fireEvent.click(screen.getByText("Execute"));
+
+    await waitFor(() => screen.getByText("✓ matched case: case-1"));
+    expect(container.querySelector('[data-kind="hit"]')).not.toBeNull();
   });
 
   it("shows an error line when fetch rejects, without crashing", async () => {

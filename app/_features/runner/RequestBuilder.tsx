@@ -88,7 +88,11 @@ export function RequestBuilder({
       }}
     >
       <div className={styles.methodRow}>
-        <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+        <Select
+          aria-label="Request Method"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+        >
           {METHODS.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -104,7 +108,7 @@ export function RequestBuilder({
         <Button variant="primary" onClick={execute} disabled={busy}>
           {busy ? "Running…" : "Execute"}
         </Button>
-        <Button variant="ghost" onClick={reset}>
+        <Button variant="ghost" onClick={reset} disabled={busy}>
           Reset to case
         </Button>
       </div>
