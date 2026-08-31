@@ -1,6 +1,6 @@
 "use client";
 import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { EndpointVM } from "@/src/viewer/model";
 import { useProject } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
@@ -9,6 +9,7 @@ import { Button, Tooltip } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { EndpointToolbar } from "@/app/_features/endpoints/EndpointToolbar";
 import { EndpointList } from "@/app/_features/endpoints/EndpointList";
+import { EndpointWorkspace } from "@/app/_features/endpoints/EndpointWorkspace";
 import styles from "@/app/_features/endpoints/endpoints.module.css";
 
 function groupPrefix(path: string): string {
@@ -21,6 +22,7 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
   const { slug } = use(params);
   const project = useProject(slug)!;
   const router = useRouter();
+  const workspaceKey = useSearchParams().get("e");
 
   const [query, setQuery] = useState("");
   const [method, setMethod] = useState("all");
@@ -72,27 +74,33 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
         }
       />
 
-      <EndpointToolbar
-        query={query}
-        onQuery={setQuery}
-        method={method}
-        onMethod={setMethod}
-        methods={methods}
-        view={view}
-        onView={setView}
-      />
-
-      {filtered.length === 0 ? (
-        <div className={styles.empty}>No endpoints match.</div>
-      ) : view === "grouped" ? (
-        groups.map(([prefix, eps]) => (
-          <section key={prefix}>
-            <div className={styles.groupLabel}>{prefix}</div>
-            <EndpointList endpoints={eps} onSelect={onSelect} />
-          </section>
-        ))
+      {workspaceKey ? (
+        <EndpointWorkspace project={project} />
       ) : (
-        <EndpointList endpoints={filtered} onSelect={onSelect} />
+        <>
+          <EndpointToolbar
+            query={query}
+            onQuery={setQuery}
+            method={method}
+            onMethod={setMethod}
+            methods={methods}
+            view={view}
+            onView={setView}
+          />
+
+          {filtered.length === 0 ? (
+            <div className={styles.empty}>No endpoints match.</div>
+          ) : view === "grouped" ? (
+            groups.map(([prefix, eps]) => (
+              <section key={prefix}>
+                <div className={styles.groupLabel}>{prefix}</div>
+                <EndpointList endpoints={eps} onSelect={onSelect} />
+              </section>
+            ))
+          ) : (
+            <EndpointList endpoints={filtered} onSelect={onSelect} />
+          )}
+        </>
       )}
     </>
   );
