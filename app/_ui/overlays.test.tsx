@@ -39,6 +39,38 @@ describe("Drawer", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("focuses the panel on open and restores focus to the trigger on close", () => {
+    function Harness({ open }: { open: boolean }) {
+      return (
+        <>
+          <button data-testid="trigger">open</button>
+          <Drawer open={open} onClose={vi.fn()} aria-label="Details">
+            <p>x</p>
+          </Drawer>
+        </>
+      );
+    }
+    const { rerender } = render(<Harness open={false} />);
+    const trigger = screen.getByTestId("trigger") as HTMLButtonElement;
+    trigger.focus();
+
+    rerender(<Harness open />);
+    const panel = screen.getByRole("dialog").lastElementChild as HTMLElement;
+    expect(document.activeElement).toBe(panel);
+
+    rerender(<Harness open={false} />);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("has an accessible name from aria-label", () => {
+    render(
+      <Drawer open onClose={vi.fn()} aria-label="Request detail">
+        <p>x</p>
+      </Drawer>,
+    );
+    expect(screen.getByRole("dialog", { name: "Request detail" })).toBeDefined();
+  });
 });
 
 describe("Tabs", () => {

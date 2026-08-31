@@ -28,7 +28,7 @@ export function TrafficDrawer({ entry, project, open, onClose }: Props) {
   }
 
   return (
-    <Drawer open={open} onClose={onClose} side="right">
+    <Drawer open={open} onClose={onClose} side="right" aria-label="Request detail">
       {entry ? (
         <div className={styles.drawer}>
           <div className={styles.drawerHead}>

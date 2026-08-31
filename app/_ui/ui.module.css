@@ -131,6 +131,11 @@
   max-height: 85vh;
   overflow: auto;
 }
+.dialogHeading {
+  margin: 0 0 var(--space-4);
+  font-size: 15px;
+  color: var(--text);
+}
 .drawerPanel {
   position: absolute;
   top: 0;

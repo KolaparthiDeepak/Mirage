@@ -34,7 +34,6 @@ export function AddVariableModal({ open, onClose }: { open: boolean; onClose: ()
 
   return (
     <Modal open={open} onClose={onClose} title="Add variable">
-      <h2 className={styles.modalTitle}>Add variable</h2>
       <div className={styles.form}>
         <label className={styles.field}>
           Name
