@@ -8,7 +8,7 @@ export { CopyButton } from "./CopyButton";
 export { Modal } from "./Modal";
 export { Drawer } from "./Drawer";
 export { Tooltip } from "./Tooltip";
-export { Tabs } from "./Tabs";
+export { Tabs, tabPanelProps } from "./Tabs";
 export { Select } from "./Select";
 export { EmptyState } from "./EmptyState";
 export { Skeleton } from "./Skeleton";

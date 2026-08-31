@@ -1,6 +1,6 @@
 "use client";
-import type { ReactNode } from "react";
-import { Tabs } from "@/app/_ui";
+import { useId, type ReactNode } from "react";
+import { Tabs, tabPanelProps } from "@/app/_ui";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import styles from "./runner.module.css";
 
@@ -29,10 +29,11 @@ export function RequestTabs({
   body: ReactNode;
   headers: ReactNode;
 }) {
+  const tabsId = useId();
   return (
     <div className={styles.reqTabs}>
-      <Tabs tabs={TABS} active={active} onChange={onChange} />
-      <div className={styles.reqPanel}>
+      <Tabs tabs={TABS} active={active} onChange={onChange} idBase={tabsId} />
+      <div className={styles.reqPanel} {...tabPanelProps(tabsId, active)}>
         {active === "body" ? (
           body
         ) : active === "headers" ? (

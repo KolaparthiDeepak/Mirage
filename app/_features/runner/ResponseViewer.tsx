@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { StatusCode, Tabs, Button, JsonView } from "@/app/_ui";
+import { useId, useState } from "react";
+import { StatusCode, Tabs, tabPanelProps, Button, JsonView } from "@/app/_ui";
 import { VerdictLine } from "./VerdictLine";
 import type { RunResult } from "./types";
 import styles from "./runner.module.css";
@@ -14,6 +14,7 @@ const TABS = [
 export function ResponseViewer({ result }: { result: RunResult }) {
   const [tab, setTab] = useState("body");
   const [pretty, setPretty] = useState(true);
+  const tabsId = useId();
   const size = new Blob([result.bodyText]).size;
 
   return (
@@ -40,9 +41,9 @@ export function ResponseViewer({ result }: { result: RunResult }) {
         </div>
       </div>
 
-      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      <Tabs tabs={TABS} active={tab} onChange={setTab} idBase={tabsId} />
 
-      <div className={styles.respPanel}>
+      <div className={styles.respPanel} {...tabPanelProps(tabsId, tab)}>
         {tab === "body" &&
           (pretty ? (
             <JsonView value={result.bodyText} />

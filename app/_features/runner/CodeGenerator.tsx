@@ -1,7 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { MutableRefObject } from "react";
-import { Button, Tabs, useToast } from "@/app/_ui";
+import { Button, Tabs, tabPanelProps, useToast } from "@/app/_ui";
 import { copyToClipboard } from "@/app/_lib/clipboard";
 import { usePreview } from "@/app/_lib/preview-store";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
@@ -24,6 +24,7 @@ export function CodeGenerator({
   copyCurlRef?: MutableRefObject<(() => void) | null>;
 }) {
   const [active, setActive] = useState("curl");
+  const tabsId = useId();
   const toast = useToast();
   const { activeEnv } = usePreview();
 
@@ -59,20 +60,22 @@ export function CodeGenerator({
 
   return (
     <div className={styles.codegen}>
-      <Tabs tabs={TABS} active={active} onChange={setActive} />
-      {active === "curl" ? (
-        <div className={styles.codeRow}>
-          <pre className={styles.codeBlock}>{resolvedCurl}</pre>
-          <Button variant="ghost" size="sm" onClick={copyCurl}>
-            Copy
-          </Button>
-        </div>
-      ) : (
-        <div className={styles.soon}>
-          <PreviewBadge />
-          <span>Code generation for {label} is coming soon.</span>
-        </div>
-      )}
+      <Tabs tabs={TABS} active={active} onChange={setActive} idBase={tabsId} />
+      <div {...tabPanelProps(tabsId, active)}>
+        {active === "curl" ? (
+          <div className={styles.codeRow}>
+            <pre className={styles.codeBlock}>{resolvedCurl}</pre>
+            <Button variant="ghost" size="sm" onClick={copyCurl}>
+              Copy
+            </Button>
+          </div>
+        ) : (
+          <div className={styles.soon}>
+            <PreviewBadge />
+            <span>Code generation for {label} is coming soon.</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
