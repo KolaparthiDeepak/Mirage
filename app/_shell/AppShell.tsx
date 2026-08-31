@@ -40,9 +40,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className={styles.shell}>
+      <a href="#main-content" className={styles.skipLink}>
+        Skip to content
+      </a>
       <TopBar onMenuClick={() => setNavOpen(true)} onOpenPalette={openPalette} />
       <Sidebar className={styles.sidebarDocked} />
-      <main className={styles.main}>{children}</main>
+      <main id="main-content" tabIndex={-1} className={styles.main}>
+        {children}
+      </main>
 
       <Drawer open={navOpen} onClose={() => setNavOpen(false)} side="left">
         <Sidebar />

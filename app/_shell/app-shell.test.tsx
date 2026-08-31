@@ -67,6 +67,16 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Open navigation" })).toBeDefined();
   });
 
+  it("renders a skip link as the first href, targeting #main-content on <main>", () => {
+    const { container } = renderShell();
+    const firstLink = container.querySelector("a[href]")!;
+    expect(firstLink.getAttribute("href")).toBe("#main-content");
+    expect(firstLink.textContent).toBe("Skip to content");
+    const main = container.querySelector("main")!;
+    expect(main.id).toBe("main-content");
+    expect(main.getAttribute("tabindex")).toBe("-1");
+  });
+
   it("⌘K toggles the palette closed again", () => {
     renderShell();
 

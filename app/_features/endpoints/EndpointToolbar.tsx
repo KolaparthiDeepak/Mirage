@@ -10,6 +10,7 @@ export function EndpointToolbar({
   methods,
   view,
   onView,
+  viewTabsId,
 }: {
   query: string;
   onQuery: (v: string) => void;
@@ -18,6 +19,8 @@ export function EndpointToolbar({
   methods: string[];
   view: "all" | "grouped";
   onView: (v: "all" | "grouped") => void;
+  /** Shared with `tabPanelProps` in the page so the tabs control the list panel. */
+  viewTabsId?: string;
 }) {
   return (
     <div className={styles.toolbar}>
@@ -48,6 +51,7 @@ export function EndpointToolbar({
         ]}
         active={view}
         onChange={(id) => onView(id as "all" | "grouped")}
+        idBase={viewTabsId}
       />
     </div>
   );

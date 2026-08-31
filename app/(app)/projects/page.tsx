@@ -1,8 +1,8 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useViewModel } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
-import { Button, Select, Tabs } from "@/app/_ui";
+import { Button, Select, Tabs, tabPanelProps } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { ProjectGrid } from "@/app/_features/projects/ProjectGrid";
 import { ProjectEmptyState } from "@/app/_features/projects/ProjectEmptyState";
@@ -17,6 +17,7 @@ export default function ProjectsPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [sort, setSort] = useState<Sort>("name");
   const [createOpen, setCreateOpen] = useState(false);
+  const viewTabsId = useId();
   const query = useDebounced(q, 150).trim().toLowerCase();
 
   const header = (
@@ -80,6 +81,7 @@ export default function ProjectsPage() {
           ]}
           active={view}
           onChange={(id) => setView(id as "grid" | "list")}
+          idBase={viewTabsId}
         />
         <Select
           aria-label="Sort projects"
@@ -91,11 +93,13 @@ export default function ProjectsPage() {
           <option value="endpoints">Endpoints</option>
         </Select>
       </div>
-      {visible.length === 0 ? (
-        <p className={styles.noMatch}>No projects match your search.</p>
-      ) : (
-        <ProjectGrid projects={visible} view={view} />
-      )}
+      <div {...tabPanelProps(viewTabsId, view)}>
+        {visible.length === 0 ? (
+          <p className={styles.noMatch}>No projects match your search.</p>
+        ) : (
+          <ProjectGrid projects={visible} view={view} />
+        )}
+      </div>
     </>
   );
 }

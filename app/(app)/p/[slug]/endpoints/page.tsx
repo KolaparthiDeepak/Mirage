@@ -1,11 +1,11 @@
 "use client";
-import { use, useMemo, useState } from "react";
+import { use, useId, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { EndpointVM } from "@/src/viewer/model";
 import { useProject } from "@/app/_lib/view-model-context";
 import { useDebounced } from "@/app/_lib/use-debounced";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { Button, EmptyState } from "@/app/_ui";
+import { Button, EmptyState, tabPanelProps } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { EndpointToolbar } from "@/app/_features/endpoints/EndpointToolbar";
 import { EndpointList } from "@/app/_features/endpoints/EndpointList";
@@ -29,6 +29,7 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
   const [method, setMethod] = useState("all");
   const [view, setView] = useState<"all" | "grouped">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const viewTabsId = useId();
   const q = useDebounced(query, 150).trim().toLowerCase();
 
   const methods = useMemo(
@@ -91,20 +92,26 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
             methods={methods}
             view={view}
             onView={setView}
+            viewTabsId={viewTabsId}
           />
 
-          {filtered.length === 0 ? (
-            <EmptyState title="No endpoints match" body="Try a different search or method filter." />
-          ) : view === "grouped" ? (
-            groups.map(([prefix, eps]) => (
-              <section key={prefix}>
-                <div className={styles.groupLabel}>{prefix}</div>
-                <EndpointList endpoints={eps} onSelect={onSelect} />
-              </section>
-            ))
-          ) : (
-            <EndpointList endpoints={filtered} onSelect={onSelect} />
-          )}
+          <div {...tabPanelProps(viewTabsId, view)}>
+            {filtered.length === 0 ? (
+              <EmptyState
+                title="No endpoints match"
+                body="Try a different search or method filter."
+              />
+            ) : view === "grouped" ? (
+              groups.map(([prefix, eps]) => (
+                <section key={prefix}>
+                  <div className={styles.groupLabel}>{prefix}</div>
+                  <EndpointList endpoints={eps} onSelect={onSelect} />
+                </section>
+              ))
+            ) : (
+              <EndpointList endpoints={filtered} onSelect={onSelect} />
+            )}
+          </div>
         </>
       )}
     </>

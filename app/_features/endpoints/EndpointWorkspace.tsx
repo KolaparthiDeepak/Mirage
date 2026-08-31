@@ -1,9 +1,9 @@
 "use client";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { ProjectVM } from "@/src/viewer/model";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { Tabs, EmptyState } from "@/app/_ui";
+import { Tabs, tabPanelProps, EmptyState } from "@/app/_ui";
 import { EndpointList } from "./EndpointList";
 import { CaseList } from "@/app/_features/cases/CaseList";
 import { RequestBuilder } from "@/app/_features/runner/RequestBuilder";
@@ -22,6 +22,7 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
   const searchParams = useSearchParams();
   const copyCurlRef = useRef<(() => void) | null>(null);
   const [mobileTab, setMobileTab] = useState("endpoints");
+  const tabsId = useId();
 
   const eParam = searchParams.get("e");
   const cParam = searchParams.get("c");
@@ -60,10 +61,10 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
       }}
     >
       <div className={styles.mobileTabs}>
-        <Tabs tabs={MOBILE_TABS} active={mobileTab} onChange={setMobileTab} />
+        <Tabs tabs={MOBILE_TABS} active={mobileTab} onChange={setMobileTab} idBase={tabsId} />
       </div>
 
-      <div className={styles.col} data-col="endpoints" role="tabpanel" aria-label="Endpoints">
+      <div className={styles.col} data-col="endpoints" {...tabPanelProps(tabsId, "endpoints")}>
         <h2 className={styles.colHeader}>Endpoints</h2>
         <EndpointList
           endpoints={project.endpoints}
@@ -75,7 +76,7 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         />
       </div>
 
-      <div className={styles.col} data-col="cases" role="tabpanel" aria-label="Cases">
+      <div className={styles.col} data-col="cases" {...tabPanelProps(tabsId, "cases")}>
         <h2 className={styles.colHeader}>
           Cases <span className={styles.colHint}>{commandCode(selectedEndpoint.path)}</span>
         </h2>
@@ -89,7 +90,7 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         />
       </div>
 
-      <div className={styles.col} data-col="request" role="tabpanel" aria-label="Request">
+      <div className={styles.col} data-col="request" {...tabPanelProps(tabsId, "request")}>
         <h2 className={styles.colHeader}>Request</h2>
         {selectedCase ? (
           <>

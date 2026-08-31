@@ -7,6 +7,20 @@
   color: var(--text);
 }
 
+.skipLink {
+  position: absolute;
+  left: -9999px;
+}
+.skipLink:focus {
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: 100;
+  background: var(--surface);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 .topbar {
   grid-column: 1 / -1;
   display: flex;
