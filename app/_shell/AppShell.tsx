@@ -1,7 +1,8 @@
 "use client";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Drawer } from "@/app/_ui";
+import { Drawer, useToast } from "@/app/_ui";
+import { useShortcuts } from "@/app/_lib/shortcuts";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { CommandPalette } from "./CommandPalette";
@@ -11,22 +12,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const pathname = usePathname();
+  const toast = useToast();
 
   useEffect(() => {
     setNavOpen(false);
     setPaletteOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((o) => !o);
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  // mod+enter (execute) and mod+shift+c (copy cURL) are handled locally in RequestBuilder / EndpointWorkspace.
+  const shortcutMap = useMemo(
+    () => ({
+      "mod+k": () => setPaletteOpen((o) => !o),
+      "mod+p": () => setPaletteOpen(true), // opens the palette (Switch project lives there); acceptable
+      "mod+e": () => toast("Preview — add endpoints via the repo"),
+      "mod+s": () => toast("Preview — cases are defined in the repo"),
+      esc: () => {
+        setNavOpen(false);
+        setPaletteOpen(false);
+      },
+    }),
+    [toast],
+  );
+  useShortcuts(shortcutMap);
 
   return (
     <div className={styles.shell}>
