@@ -125,6 +125,35 @@
   color: var(--text-secondary);
 }
 
+/* CodeGenerator */
+.codegen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.codeRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.codeBlock {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+
 /* VerdictLine */
 .verdict {
   margin: var(--space-2) 0 0;
