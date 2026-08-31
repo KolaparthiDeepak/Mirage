@@ -27,8 +27,14 @@ export function RuleBuilder({
   useEffect(() => {
     const draft = state.rulesDraft[endpoint.key] ?? [];
     if (draft.length > 0) {
-      setConditions(draft.map((d) => ({ field: d.field, op: d.op, value: d.value })));
       setCaseId(draft[0]!.caseId);
+      // op === "" marks a caseId-only placeholder (no conditions yet)
+      const real = draft.filter((d) => d.op !== "");
+      if (real.length > 0) {
+        setConditions(
+          real.map((d) => ({ field: d.field, op: d.op, value: d.value })),
+        );
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -41,13 +47,25 @@ export function RuleBuilder({
       ...s,
       rulesDraft: {
         ...s.rulesDraft,
-        [endpoint.key]: nextConditions.map((c, i) => ({
-          id: `${endpoint.key}-${i}`,
-          field: c.field,
-          op: c.op,
-          value: c.value,
-          caseId: nextCaseId,
-        })),
+        [endpoint.key]:
+          nextConditions.length > 0
+            ? nextConditions.map((c, i) => ({
+                id: `${endpoint.key}-${i}`,
+                field: c.field,
+                op: c.op,
+                value: c.value,
+                caseId: nextCaseId,
+              }))
+            : // keep the chosen return case alive with no conditions
+              [
+                {
+                  id: `${endpoint.key}-case`,
+                  field: "",
+                  op: "",
+                  value: "",
+                  caseId: nextCaseId,
+                },
+              ],
       },
     }));
   }
