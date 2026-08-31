@@ -109,7 +109,7 @@ describe("EndpointWorkspace", () => {
     expect(url).not.toContain("c=");
   });
 
-  it("renders the mobile column tabs and reflects the active column", () => {
+  it("renders the mobile column switcher as aria-pressed buttons and reflects the active column", () => {
     render(
       <PreviewProvider>
         <ToastProvider>
@@ -118,18 +118,33 @@ describe("EndpointWorkspace", () => {
       </PreviewProvider>,
     );
 
-    expect(screen.getByRole("tab", { name: "Endpoints" })).toBeDefined();
-    expect(screen.getByRole("tab", { name: "Cases" })).toBeDefined();
-    expect(screen.getByRole("tab", { name: "Request" })).toBeDefined();
+    const group = screen.getByRole("group", { name: "Workspace section" });
+    const endpointsBtn = within(group).getByRole("button", { name: "Endpoints" });
+    expect(endpointsBtn.getAttribute("aria-pressed")).toBe("true");
 
     const workspace = document.querySelector("[data-mobile-tab]")!;
     expect(workspace.getAttribute("data-mobile-tab")).toBe("endpoints");
 
-    fireEvent.click(screen.getByRole("tab", { name: "Cases" }));
+    fireEvent.click(within(group).getByRole("button", { name: "Cases" }));
     expect(workspace.getAttribute("data-mobile-tab")).toBe("cases");
+    expect(within(group).getByRole("button", { name: "Cases" }).getAttribute("aria-pressed")).toBe("true");
+  });
 
-    // the three columns are exposed as tabpanels
-    expect(screen.getAllByRole("tabpanel").length).toBeGreaterThanOrEqual(3);
+  it("exposes the three desktop columns as named regions, not orphan tabpanels", () => {
+    render(
+      <PreviewProvider>
+        <ToastProvider>
+          <EndpointWorkspace project={project} />
+        </ToastProvider>
+      </PreviewProvider>,
+    );
+
+    for (const col of ["endpoints", "cases", "request"]) {
+      const div = document.querySelector(`[data-col="${col}"]`)!;
+      expect(div.getAttribute("role")).toBe("region");
+      const labelId = div.getAttribute("aria-labelledby")!;
+      expect(document.getElementById(labelId)?.textContent).toBeTruthy();
+    }
   });
 
   it("advances the mobile tab to cases when an endpoint is selected", () => {

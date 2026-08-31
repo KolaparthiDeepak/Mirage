@@ -3,7 +3,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { ProjectVM } from "@/src/viewer/model";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { Tabs, tabPanelProps, EmptyState } from "@/app/_ui";
+import { EmptyState } from "@/app/_ui";
 import { EndpointList } from "./EndpointList";
 import { CaseList } from "@/app/_features/cases/CaseList";
 import { RequestBuilder } from "@/app/_features/runner/RequestBuilder";
@@ -22,7 +22,8 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
   const searchParams = useSearchParams();
   const copyCurlRef = useRef<(() => void) | null>(null);
   const [mobileTab, setMobileTab] = useState("endpoints");
-  const tabsId = useId();
+  const hid = useId();
+  const headId = (col: string) => `${hid}-${col}`;
 
   const eParam = searchParams.get("e");
   const cParam = searchParams.get("c");
@@ -60,12 +61,21 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         }
       }}
     >
-      <div className={styles.mobileTabs}>
-        <Tabs tabs={MOBILE_TABS} active={mobileTab} onChange={setMobileTab} idBase={tabsId} />
+      <div className={styles.mobileTabs} role="group" aria-label="Workspace section">
+        {MOBILE_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-pressed={mobileTab === t.id}
+            onClick={() => setMobileTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className={styles.col} data-col="endpoints" {...tabPanelProps(tabsId, "endpoints")}>
-        <h2 className={styles.colHeader}>Endpoints</h2>
+      <div className={styles.col} data-col="endpoints" role="region" aria-labelledby={headId("endpoints")}>
+        <h2 id={headId("endpoints")} className={styles.colHeader}>Endpoints</h2>
         <EndpointList
           endpoints={project.endpoints}
           selectedKey={selectedEndpoint.key}
@@ -76,8 +86,8 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         />
       </div>
 
-      <div className={styles.col} data-col="cases" {...tabPanelProps(tabsId, "cases")}>
-        <h2 className={styles.colHeader}>
+      <div className={styles.col} data-col="cases" role="region" aria-labelledby={headId("cases")}>
+        <h2 id={headId("cases")} className={styles.colHeader}>
           Cases <span className={styles.colHint}>{commandCode(selectedEndpoint.path)}</span>
         </h2>
         <CaseList
@@ -90,8 +100,8 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         />
       </div>
 
-      <div className={styles.col} data-col="request" {...tabPanelProps(tabsId, "request")}>
-        <h2 className={styles.colHeader}>Request</h2>
+      <div className={styles.col} data-col="request" role="region" aria-labelledby={headId("request")}>
+        <h2 id={headId("request")} className={styles.colHeader}>Request</h2>
         {selectedCase ? (
           <>
             <RequestBuilder key={selectedCase.id} case_={selectedCase} />
