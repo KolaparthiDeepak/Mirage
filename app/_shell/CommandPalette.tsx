@@ -140,9 +140,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }));
   }, [commands, q, onClose]);
 
+  // Memoized on (model, query) only, so unrelated re-renders (router/toast/
+  // highlight changes) never re-run the search scan.
+  const searchResults = useMemo(
+    () => (query.trim() === "" ? null : searchViewModel(model, query)),
+    [model, query],
+  );
+
   const resultRows = useMemo<Row[]>(() => {
-    if (query.trim() === "") return [];
-    const r = searchViewModel(model, query);
+    const r = searchResults;
+    if (!r) return [];
     const rows: Row[] = [];
     for (const p of r.projects) {
       const href = projectHref(p.slug);
@@ -192,7 +199,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       });
     }
     return rows;
-  }, [model, query, router, onClose]);
+  }, [searchResults, router, onClose]);
 
   const rows = useMemo(() => [...commandRows, ...resultRows], [commandRows, resultRows]);
 
