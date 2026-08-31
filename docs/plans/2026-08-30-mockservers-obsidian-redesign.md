@@ -1558,14 +1558,87 @@ Base at Phase 5 start: after the Phase 4 fix wave (see ledger for the exact SHA)
 
 ---
 
-# PHASE 6 — Paper theme, responsive, a11y, perf (task inventory)
+# PHASE 6 — Paper theme, responsive, a11y, perf
 
-- **T6.1 Paper theme pass** — audit every `*.module.css` for contrast under `[data-theme="paper"]`; fix weak tokens; verify status colors on light ground. Test: manual + computed-style snapshot of key components in both themes.
-- **T6.2 Responsive** — sidebar -> `<Drawer>` under 960px with a TopBar hamburger; workspace 3 columns -> `<Tabs>` under 960px; tables -> stacked rows under 720px. Test: render at widths via `matchMedia` mock; assert the collapsed structure.
-- **T6.3 a11y sweep** — every icon-only button has `aria-label`; logical `Tab` order; `Esc` closes every overlay; `:focus-visible` on all interactives; palette / drawer / modal are labelled dialogs with focus trap. Assert key ARIA attributes in tests (no new a11y dep — honor "no new deps"). `npm run lint` clean with `eslint-config-next`'s jsx-a11y rules.
-- **T6.4 perf** — `useDebounced` on every search input (150ms); memoize `searchViewModel`; virtualize a list only if it exceeds ~200 rows (card-block-lost has 7 endpoints / 35 cases -> none needed; document the decision, add no windowing lib). Test: search input does not re-filter on every keystroke (fake timers).
-- **T6.5 final QA against source spec §37** — walk the checklist; fix regressions.
-- **Phase 6 exit:** source spec §37 quality bar met; both themes ship; responsive per §28; `npm run check` + `npm run build` green.
+Base at Phase 6 start: `07f2dcf` (after the Phase 5 fix wave). 4 tasks (P6.1–P6.4). Same rules (test → fail → implement → `npm run check` EXIT 0 → `npm run build` EXIT 0 → commit; no `import React`; component tests `*.test.tsx` + `@testing-library/react` + `afterEach(cleanup)`; no hardcoded hex; no `git add -A`; Node v26; commit trailer). Polish only — no new features/routes, no backend touch, no new deps.
+
+### Accumulated Minor findings to clear across P6.2–P6.4 (from every prior phase review; detail in `.superpowers/sdd/phase-{1..5}-review.md`)
+- **a11y:** roving-tabindex needs a container `tabIndex={0}` fallback when no row is selected (EndpointList/CaseList/TrafficTable); `Tooltip.tsx` `aria-describedby` on a wrapper span → never announced; `Tabs.tsx` panel ARIA wired for `SettingsTabs` only → wire other consumers; `<th scope="col">` audit; `Dropdown` `role="menu"` has no arrow-key nav; no skip-to-content link; CommandPalette now shows a visible "Command palette" `<h2>` → hide it visually while keeping `aria-labelledby`.
+- **theme:** TopBar theme-toggle lost the dynamic sun/moon icon + `aria-label` → restore state-reflecting icon + label.
+- **perf:** `searchViewModel` not memoized at call sites.
+- **dead code:** `stripEnv` (exported, tested, zero callers); `.disabledBtn` CSS; `[hidden]` guard in `useShortcuts`; ~50 duplicated lines between the two traffic pages; array-index `key`s in RuleBuilder/ScenarioCanvas.
+- **misc:** `matchCombo` should ignore `altKey`-only; `?tab=` deep-link untested; standardize id generation on one `app/_lib/id.ts` `newId()`.
+
+---
+
+### P6.1: Paper (light) theme pass
+
+**Files:** audit + edit `app/tokens.css` and every `app/**/*.module.css`; `app/_shell/TopBar.tsx` (theme-toggle icon/label); extend `app/_lib/theme.test.tsx`.
+**Do:**
+1. Walk every screen in the Paper theme (`document.documentElement.dataset.theme = "paper"`). Obsidian tokens are dark-first; `:root[data-theme="paper"]` in `app/tokens.css` redefines them. Check each `*.module.css` for dark-ground assumptions: `color-mix(..., transparent)` overlays that vanish on white, `box-shadow` only readable on dark, borders too faint on `#FBFAF7`, `--success/--warning/--error` contrast on light, JsonView `:global(.j-*)` colors, scenario canvas dotted bg, `Badge`/`PreviewBadge` tones, focus rings.
+2. Fix by adjusting `[data-theme="paper"]` token values in `tokens.css` (preferred); touch a module CSS only if no token expresses it. Add tokens as needed (e.g. `--shadow-sm` — subtle/none in light).
+3. `TopBar.tsx`: theme toggle `<button aria-label={paper ? "Switch to dark theme" : "Switch to light theme"}>` shows ☀ when paper / ☾ when obsidian; reads current theme via `useState` synced from `getTheme()` in a `useEffect`, updated on click after `toggleTheme()`.
+**Test:** `theme.test.tsx` — `setTheme("paper")` → `getTheme()` `"paper"` + `<html data-theme="paper">`; `readFileSync` assertion that the paper block redefines `--bg/--text/--border/--surface` + the 4 status colors. `TopBar` test: toggle `aria-label` flips after click (mock `@/app/_lib/theme`).
+**Commit** `feat(theme): Paper light-theme pass + dynamic theme toggle`.
+
+---
+
+### P6.2: Responsive
+
+**Files:** `app/_shell/{shell.module.css,AppShell.tsx}`; `app/_features/endpoints/{endpoints.module.css,EndpointWorkspace.tsx}`; `app/_features/traffic/traffic.module.css`, `variables/variables.module.css`, `settings/settings.module.css`; `app/_lib/use-media-query.ts` if a JS breakpoint is genuinely needed.
+**Do:**
+1. **Sidebar** (drawers <960 since Phase 1) — verify hamburger shows only <960, drawer works + closes on nav.
+2. **Endpoint Workspace** — `<960px`: a `<Tabs>` (Endpoints/Cases/Request) + only the active column visible (`data-mobile-tab` + CSS, `display:none` ≥960); selecting an endpoint → "cases", a case → "request" (Phase 4 fix — verify). Column wrappers get `role="tabpanel"` (coordinate with P6.3).
+3. **Tables → stacked <720px** — `TrafficTable`, `VariableTable`, Settings `ServerTab` list, Cases-page grouped rows if tabular. `<tr>` → block with stacked `<td>`s + a `::before` label from `data-label`, OR a `<dl>` at that breakpoint. Keep `<table>` semantics where possible.
+4. No horizontal body scroll at 390 / 768 / 1024 / 1440px; wide content (code, cURL) scrolls in its own `overflow-x:auto`.
+**Test:** mock `window.matchMedia` → `EndpointWorkspace` narrow → mobile `<Tabs>` present, one column queryable; `TrafficTable` narrow → stacked structure (`data-label` / `<dl>`); `AppShell` narrow → hamburger present.
+**Commit** `feat(responsive): mobile workspace tabs + stacked tables + verified sidebar drawer`.
+
+---
+
+### P6.3: Accessibility sweep
+
+**Files:** `app/_ui/{Tooltip,Tabs,Dropdown,Modal}.tsx` + Tabs' unwired consumers; `app/_shell/{AppShell,CommandPalette}.tsx`; `app/_features/{endpoints/EndpointList,cases/CaseList,traffic/TrafficTable}.tsx`; every `<table>`; icon-button `aria-label` audit across `app/**`.
+**Do:**
+1. **`Tooltip.tsx`** — move `aria-describedby` onto the child element (clone with the prop) or set `title` on the child + `role="tooltip"` on the tip referenced from the interactive child. Keep hover + focus triggers.
+2. **`Tabs.tsx` + consumers** — wire the Phase-5 `tabPanelProps(idBase, activeId)` helper into `projects/page.tsx`, `EndpointToolbar`, `EndpointWorkspace` mobile tabs, `RequestTabs`, `ResponseViewer`, `CodeGenerator`: each panel `<div>` gets `role="tabpanel"` + `id` + `aria-labelledby`; tab buttons get `aria-controls`.
+3. **`Dropdown.tsx`** — ArrowUp/Down move focus between `menuitem`s, `Home`/`End`, `Esc` closes + restores focus to trigger.
+4. **Roving-tabindex fallback** — EndpointList/CaseList/TrafficTable: when nothing selected, the first row is `tabIndex={0}`.
+5. **Skip link** — `AppShell.tsx`: a visually-hidden-until-focused `<a href="#main-content">Skip to content</a>` as the first focusable; `<main id="main-content" tabIndex={-1}>`.
+6. **CommandPalette title** — add `hideTitleVisually?: boolean` to `Modal.tsx` (`<h2>` gets a visually-hidden class, `aria-labelledby` unchanged); use it in `CommandPalette`.
+7. **`<th scope="col">`** on every table header cell.
+8. **Icon-button audit** — grep for `<button>`s whose only child is a glyph/icon/`⋯`/`×`/`☰`; ensure each has `aria-label`.
+9. `npx eslint .` clean incl. `jsx-a11y` rules (already in the lint config).
+**Test:** `Tooltip` — trigger child has `aria-describedby`; `Dropdown` — ArrowDown moves `activeElement`, `Esc` closes; `AppShell` — skip link is first tabbable, targets `#main-content`; `readFileSync` regex over `*.tsx` that no `<th>` lacks `scope`.
+**Commit** `a11y: tooltip/tabs/dropdown/skip-link/roving-tabindex sweep`.
+
+---
+
+### P6.4: Performance, dead-code cleanup, final QA
+
+**Files:** `app/_shell/{GlobalSearch,CommandPalette}.tsx`; `app/_lib/{env-url.ts,id.ts (new),shortcuts.ts}`; `app/_features/traffic/*` (extract `TrafficView`); assorted dead-CSS/field removal; rules/scenarios (index keys → `newId()`).
+**Do:**
+1. **Memoize** `searchViewModel` at both call sites (`useMemo(() => searchViewModel(model, q), [model, q])`).
+2. **`app/_lib/id.ts`** — `export const newId = () => globalThis.crypto?.randomUUID?.() ?? \`id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}\`;`. Replace every ad-hoc `crypto.randomUUID?.() ?? ...` (scenarios/rules/environments/variables/preview-store).
+3. **`stripEnv`** — no caller. Wire it (one line: `RequestBuilder.reset()` uses it to normalize a user-typed absolute URL back to relative when the env is Local) or delete it + its test. Prefer delete unless the wire is trivial.
+4. **`TrafficView`** — extract the shared table+drawer+toolbar body of the two traffic pages into `app/_features/traffic/TrafficView.tsx`; both pages become thin wrappers.
+5. **`shortcuts.ts`** — `matchCombo` returns `null` when `altKey` is the sole modifier. Try dropping the `[hidden]` guard; keep it (commented) only if tests go red.
+6. **Dead code** — remove `.disabledBtn` (projects module); resolve the Settings `description` field (wire to YAML output or label "not persisted"); drop stale `TODO(phase-N)` comments in `Sidebar.tsx` for now-live routes.
+7. **No virtualization** — one-line `// ponytail:` comment in `EndpointList`/`CaseList` documenting the decision (< ~200 rows → linear render).
+8. **Final QA — source spec §37** (`docs/specs/2026-08-29-mockservers-luxury-ui-source-spec.md`): no broken functionality; no lorem; no fake metrics; consistent spacing/type; every control works or is clearly preview; card-block-lost endpoints all select + execute; cases load; body edit + Execute + cURL copy work; both themes readable. Run `npm run dev`, exercise the workspace runner against the live mock in BOTH themes, kill it. Record the walkthrough in the report; fix any regression.
+**Test:** `GlobalSearch` — `searchViewModel` (spied) runs ≤ once per debounce (fake timers); `id.ts` — `newId()` non-empty, two calls differ; `TrafficView` — renders from either input shape; `shortcuts` — `altKey`-only → `null`.
+**Commit(s)** split as sensible: `perf: memoize search`, `refactor: shared TrafficView + newId helper`, `chore: dead-code sweep + §37 QA`.
+
+---
+
+### Phase 6 exit criteria
+- Both themes ship; every screen readable + contrast-adequate in Paper.
+- No horizontal body scroll at 390/768/1024/1440px; sidebar drawers, workspace columns tab, tables stack on mobile.
+- `Tooltip`/`Tabs`/`Dropdown`/`Modal`/`Drawer`/palette correctly labelled/roled/focus-managed; skip link present; `eslint` (incl. `jsx-a11y`) clean.
+- `searchViewModel` memoized; one `newId()` helper; `stripEnv` resolved; traffic pages de-duplicated.
+- Source spec §37 walkthrough done in both themes, no regressions; the card-block-lost runner still executes live.
+- `npm run check` + `npm run build` green.
+- **Final whole-branch review (opus) over the ENTIRE branch** (`main`..HEAD), then the Wrap-up.
 
 ---
 
