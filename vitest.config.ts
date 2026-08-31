@@ -3,6 +3,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    environmentMatchGlobs: [["app/**/*.test.tsx", "jsdom"]],
     include: ["src/**/*.test.{ts,tsx}", "app/**/*.test.{ts,tsx}"],
     exclude: [...configDefaults.exclude, "out/**", ".vercel/**"],
     passWithNoTests: true,
@@ -10,4 +11,7 @@ export default defineConfig({
   resolve: {
     alias: { "@": new URL(".", import.meta.url).pathname },
   },
+  // tsconfig jsx is "preserve" for Next; esbuild needs the automatic runtime
+  // so test files render JSX without importing React.
+  esbuild: { jsx: "automatic" },
 });

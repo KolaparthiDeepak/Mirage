@@ -1,0 +1,50 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 60vh;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.message {
+  margin: 0;
+  max-width: 44ch;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.link {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--text);
+}
+
+/* route transition skeleton — matches the main-column rhythm */
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

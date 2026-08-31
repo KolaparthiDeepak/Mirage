@@ -1,0 +1,227 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.invalid {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--error);
+}
+
+.pane {
+  display: flex;
+  align-items: stretch;
+  min-height: 160px;
+}
+
+.gutter {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-2);
+  border-right: 1px solid var(--border);
+  background: var(--surface-elevated);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-align: right;
+  user-select: none;
+}
+
+.textarea {
+  flex: 1;
+  min-height: 160px;
+  padding: var(--space-3);
+  border: none;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* RequestBuilder */
+.builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.methodRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.urlInput {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.urlInput:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--warning);
+}
+
+.error {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-sm);
+  color: var(--error);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* RequestTabs */
+.reqTabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.reqPanel {
+  min-height: 120px;
+}
+
+.soon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* CodeGenerator */
+.codegen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.codeRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.codeBlock {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+}
+
+/* VerdictLine */
+.verdict {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.verdict[data-kind="hit"] {
+  color: var(--success);
+}
+.verdict[data-kind="divert"] {
+  color: var(--warning);
+}
+.verdict[data-kind="nomatch"] {
+  color: var(--error);
+}
+.verdict[data-kind="unknown"] {
+  color: var(--text-muted);
+}
+
+/* ResponseViewer */
+.response {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-3);
+}
+
+.respHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.respMeta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.respToggle {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.respPanel {
+  overflow-x: auto;
+}
+
+.raw {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface-elevated);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.headerList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}

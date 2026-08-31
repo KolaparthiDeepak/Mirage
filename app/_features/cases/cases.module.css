@@ -1,0 +1,236 @@
+.list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--surface);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.row[aria-selected="true"] {
+  background: var(--surface-elevated);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.rowGenerated .label {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.dot[data-kind="2"] {
+  background: var(--success);
+}
+
+.dot[data-kind="4"] {
+  background: var(--warning);
+}
+
+.dot[data-kind="5"] {
+  background: var(--error);
+}
+
+.dot[data-kind="x"] {
+  background: var(--text-muted);
+}
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: var(--space-2);
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* dot, "generated" badge, status code and the ⋯ menu keep their size. */
+.row > *:not(.label):not(.match) {
+  flex-shrink: 0;
+}
+
+.overflow {
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+}
+
+.section {
+  margin-bottom: var(--space-6);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.casesLayout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.rail {
+  position: sticky;
+  top: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+@media (max-width: 960px) {
+  .casesLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .rail {
+    position: static;
+  }
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.detailLabel {
+  margin: 0 0 var(--space-2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.matchList {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* --- creation modal body --- */
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 360px;
+  max-width: 480px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.slugPreview {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.warn {
+  font-size: 12px;
+  color: var(--error);
+}
+
+.textarea {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  resize: vertical;
+}
+
+.yamlBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.pre {
+  margin: 0;
+  width: 100%;
+  overflow-x: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.note code {
+  font-family: var(--font-mono);
+}
