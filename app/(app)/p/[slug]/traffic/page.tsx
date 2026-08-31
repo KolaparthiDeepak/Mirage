@@ -45,9 +45,17 @@ export default function TrafficPage({ params }: { params: Promise<{ slug: string
     const a = document.createElement("a");
     a.href = url;
     a.download = `${slug}-traffic-sample.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
   }
+
+  // Search the full list so filtering the selected row out of the table doesn't
+  // leave the drawer open with no content.
+  const selected = all.find((e) => e.id === selId) ?? null;
 
   return (
     <>
@@ -87,9 +95,9 @@ export default function TrafficPage({ params }: { params: Promise<{ slug: string
 
       <TrafficTable entries={filtered} selectedId={selId} onSelect={setSelId} />
       <TrafficDrawer
-        entry={filtered.find((e) => e.id === selId) ?? null}
+        entry={selected}
         project={project}
-        open={selId != null}
+        open={selected != null}
         onClose={() => setSelId(null)}
       />
     </>

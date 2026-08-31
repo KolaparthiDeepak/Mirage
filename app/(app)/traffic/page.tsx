@@ -45,18 +45,25 @@ export default function WorkspaceTrafficPage() {
   );
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify(all.map((r) => r.entry), null, 2)], {
+    const payload = all.map((r) => ({ ...r.entry, project: r.project.slug }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "workspace-traffic-sample.json";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 0);
   }
 
-  const selected = filtered.find((r) => r.entry.id === selId) ?? null;
+  // Search the full list, not `filtered`, so filtering a selected row out of the
+  // table doesn't leave the drawer open with no content.
+  const selected = all.find((r) => r.entry.id === selId) ?? null;
 
   return (
     <>
@@ -102,7 +109,7 @@ export default function WorkspaceTrafficPage() {
       <TrafficDrawer
         entry={selected?.entry ?? null}
         project={selected?.project ?? null}
-        open={selId != null}
+        open={selected != null}
         onClose={() => setSelId(null)}
       />
     </>

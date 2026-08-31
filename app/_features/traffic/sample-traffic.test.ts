@@ -42,6 +42,12 @@ const project = {
 describe("sampleTraffic", () => {
   const keys = project.endpoints.map((e) => e.key);
 
+  it("gives every entry a project-slug-prefixed, unique id", () => {
+    const entries = sampleTraffic(project);
+    for (const e of entries) expect(e.id.startsWith("p::")).toBe(true);
+    expect(new Set(entries.map((e) => e.id)).size).toBe(entries.length);
+  });
+
   it("only references real endpoint keys", () => {
     const entries = sampleTraffic(project);
     expect(entries.length).toBeGreaterThan(0);

@@ -64,7 +64,7 @@ export function sampleTraffic(project: ProjectVM): TrafficEntry[] {
       const status = c?.expected.status ?? 200;
       const idx = out.length;
       out.push({
-        id: `${endpoint.key}-${i}`,
+        id: `${project.slug}::${endpoint.key}::${i}`,
         method: endpoint.method,
         endpointKey: endpoint.key,
         path: endpoint.path,
@@ -72,7 +72,7 @@ export function sampleTraffic(project: ProjectVM): TrafficEntry[] {
         at: AT[idx % AT.length]!,
         ms: MS[idx % MS.length]!,
         reqHeaders: { "content-type": "application/json" },
-        reqBody: endpoint.cases[i]?.request?.body ?? "{}",
+        reqBody: c?.request.body ?? "{}",
         resBody: JSON.stringify(c?.expected.body ?? {}),
       });
     }
