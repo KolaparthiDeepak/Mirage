@@ -78,8 +78,8 @@ describe("RequestBuilder", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
 
     const [calledUrl, init] = fetchMock.mock.calls[0]!;
-    // Local env (http://localhost:3000) rebases the absolute draft URL.
-    expect(calledUrl).toBe("http://localhost:3000/m/demo/x");
+    // Local env leaves the draft URL untouched (dev server may be on any port).
+    expect(calledUrl).toBe("http://localhost/m/demo/x");
     expect(init.method).toBe("POST");
     expect(init.body).toBe('{"a":1}');
     expect(init.headers).toEqual({ "content-type": "application/json" });
@@ -166,9 +166,8 @@ describe("RequestBuilder × active environment", () => {
     );
 
     const input = screen.getByLabelText("Request URL") as HTMLInputElement;
-    expect(input.value).toBe(
-      "http://localhost:3000/m/card-block-lost/commands/x/GET_CARD/v1",
-    );
+    // Local env: the relative draft URL is shown as-is.
+    expect(input.value).toBe("/m/card-block-lost/commands/x/GET_CARD/v1");
     expect(screen.queryByText(/^env:/)).toBeNull();
 
     fireEvent.click(screen.getByText("env-qa"));

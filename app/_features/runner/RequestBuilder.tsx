@@ -15,6 +15,12 @@ import styles from "./runner.module.css";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
+// Local env = "whatever origin the dev server runs on" — keep the draft URL as-is
+// (relative). Only a non-local env rebases the URL onto its baseUrl.
+function seedUrl(url: string, env: { id: string; baseUrl: string }): string {
+  return env.id === "local" ? url : applyEnv(url, env);
+}
+
 function seedHeaders(headers: Record<string, string>): string {
   return Object.entries(headers)
     .map(([k, v]) => `${k}: ${v}`)
@@ -31,7 +37,7 @@ export function RequestBuilder({
   const draft = case_.request;
   const { activeEnv } = usePreview();
   const [method, setMethod] = useState(draft.method);
-  const [url, setUrl] = useState(() => applyEnv(draft.url, activeEnv));
+  const [url, setUrl] = useState(() => seedUrl(draft.url, activeEnv));
   const [headersText, setHeadersText] = useState(seedHeaders(draft.headers));
   const [body, setBody] = useState(draft.body ?? "");
   const [busy, setBusy] = useState(false);
@@ -41,7 +47,7 @@ export function RequestBuilder({
 
   // re-seeding from the case discards a manual URL edit on env switch — acceptable for a preview affordance
   useEffect(() => {
-    setUrl(applyEnv(case_.request.url, activeEnv));
+    setUrl(seedUrl(case_.request.url, activeEnv));
   }, [activeEnv, case_.request.url]);
 
   async function execute() {
@@ -79,7 +85,7 @@ export function RequestBuilder({
 
   function reset() {
     setMethod(draft.method);
-    setUrl(applyEnv(draft.url, activeEnv));
+    setUrl(seedUrl(draft.url, activeEnv));
     setHeadersText(seedHeaders(draft.headers));
     setBody(draft.body ?? "");
     setResult(null);
