@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTheme, setTheme, toggleTheme } from "./theme";
 
@@ -49,5 +51,25 @@ describe("theme", () => {
     toggleTheme();
     expect(getTheme()).toBe("obsidian");
     expect(document.documentElement.dataset.theme).toBeUndefined();
+  });
+});
+
+describe("tokens.css paper theme", () => {
+  const css = readFileSync(resolve(process.cwd(), "app/tokens.css"), "utf8");
+  const block = css.slice(css.indexOf('[data-theme="paper"]'), css.indexOf("@media"));
+
+  it("redefines the core surface and status tokens in the paper block", () => {
+    for (const name of [
+      "--bg",
+      "--surface",
+      "--text",
+      "--border",
+      "--success",
+      "--warning",
+      "--error",
+      "--info",
+    ]) {
+      expect(block).toMatch(new RegExp(`${name}\\s*:`));
+    }
   });
 });

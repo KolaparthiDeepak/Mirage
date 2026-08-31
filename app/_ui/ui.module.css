@@ -117,14 +117,14 @@
 .backdrop {
   position: absolute;
   inset: 0;
-  background: var(--bg);
-  opacity: 0.6;
+  background: var(--scrim);
 }
 .modalPanel {
   position: relative;
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   padding: var(--space-5);
   min-width: 320px;
   max-width: 90vw;
@@ -143,6 +143,7 @@
   width: min(420px, 90vw);
   background: var(--surface-elevated);
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
   padding: var(--space-5);
   overflow: auto;
   transition: transform var(--transition);
@@ -272,6 +273,7 @@
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   padding: var(--space-1);
   z-index: var(--z-modal);
 }
@@ -309,6 +311,7 @@
   background: var(--surface-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   padding: var(--space-2) var(--space-3);
   color: var(--text);
   font-size: 12px;

@@ -1,8 +1,9 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Kbd } from "@/app/_ui";
-import { toggleTheme } from "@/app/_lib/theme";
+import { getTheme, toggleTheme, type Theme } from "@/app/_lib/theme";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { GlobalSearch } from "./GlobalSearch";
 import styles from "./shell.module.css";
@@ -16,6 +17,9 @@ export function TopBar({
 }) {
   const pathname = usePathname();
   const inProject = pathname?.startsWith("/p/") ?? false;
+
+  const [theme, setThemeState] = useState<Theme>("obsidian");
+  useEffect(() => setThemeState(getTheme()), []);
 
   return (
     <header className={styles.topbar}>
@@ -63,11 +67,15 @@ export function TopBar({
         </span>
         <button
           type="button"
-          aria-label="Toggle theme"
+          aria-label={theme === "paper" ? "Switch to dark theme" : "Switch to light theme"}
+          title={theme === "paper" ? "Switch to dark theme" : "Switch to light theme"}
           className={styles.themeBtn}
-          onClick={() => toggleTheme()}
+          onClick={() => {
+            toggleTheme();
+            setThemeState(getTheme());
+          }}
         >
-          ☀
+          {theme === "paper" ? "☀" : "☾"}
         </button>
       </div>
     </header>
