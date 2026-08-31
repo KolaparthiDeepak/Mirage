@@ -7,7 +7,13 @@ import { ProjectSwitcher } from "./ProjectSwitcher";
 import { GlobalSearch } from "./GlobalSearch";
 import styles from "./shell.module.css";
 
-export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
+export function TopBar({
+  onMenuClick,
+  onOpenPalette,
+}: {
+  onMenuClick?: () => void;
+  onOpenPalette?: () => void;
+}) {
   const pathname = usePathname();
   const inProject = pathname?.startsWith("/p/") ?? false;
 
@@ -43,7 +49,14 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
       <div className={styles.topbarRight}>
         {inProject ? <ProjectSwitcher /> : null}
         <GlobalSearch />
-        <Kbd>⌘K</Kbd>
+        <button
+          type="button"
+          className={styles.paletteHint}
+          aria-label="Open command palette"
+          onClick={onOpenPalette}
+        >
+          <Kbd>⌘K</Kbd>
+        </button>
         <span className={styles.status}>
           <span className={styles.statusDot} aria-hidden="true" />
           Running
