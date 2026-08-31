@@ -3,6 +3,7 @@ import { use, useEffect } from "react";
 import { useProject } from "@/app/_lib/view-model-context";
 import { commandCode } from "@/app/_lib/endpoint-label";
 import { usePreview, type Scenario, type ScenarioStep } from "@/app/_lib/preview-store";
+import { newId } from "@/app/_lib/id";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import { Button, EmptyState } from "@/app/_ui";
@@ -10,10 +11,6 @@ import { ScenarioToolbar } from "@/app/_features/scenarios/ScenarioToolbar";
 import { ScenarioCanvas } from "@/app/_features/scenarios/ScenarioCanvas";
 
 const SEED_STEPS = ["GET_CARD", "CHECK_CARD_ELIGIBILITY", "BLOCK_CARD", "NOTIFY_CUSTOMER"];
-
-const uid = (fallback: string) =>
-  globalThis.crypto?.randomUUID?.() ??
-  `${fallback}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function ScenariosPage({
   params,
@@ -37,7 +34,7 @@ export default function ScenariosPage({
       const ep = project.endpoints.find((e) => commandCode(e.path) === name);
       if (ep) {
         steps.push({
-          id: uid("seed"),
+          id: newId(),
           endpointKey: ep.key,
           expectedStatus: 200,
         });
@@ -49,7 +46,7 @@ export default function ScenariosPage({
       ...s,
       scenarios: {
         ...s.scenarios,
-        [slug]: [{ id: uid("seed"), name: "Card Blocking", steps }],
+        [slug]: [{ id: newId(), name: "Card Blocking", steps }],
       },
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,9 +58,9 @@ export default function ScenariosPage({
     const first = project.endpoints[0];
     if (!first) return;
     const created: Scenario = {
-      id: uid("scenario"),
+      id: newId(),
       name: "New scenario",
-      steps: [{ id: uid("step"), endpointKey: first.key, expectedStatus: 200 }],
+      steps: [{ id: newId(), endpointKey: first.key, expectedStatus: 200 }],
     };
     set((s) => ({
       ...s,

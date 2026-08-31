@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { usePreview } from "@/app/_lib/preview-store";
+import { newId } from "@/app/_lib/id";
 import { Button, Input, Modal } from "@/app/_ui";
 import styles from "./environments.module.css";
 
@@ -27,7 +28,7 @@ export function AddEnvironmentModal({ open, onClose }: { open: boolean; onClose:
       environments: [
         ...s.environments,
         {
-          id: globalThis.crypto?.randomUUID?.() ?? `env-${s.environments.length}-${Date.now()}`,
+          id: newId(),
           name: name.trim(),
           baseUrl: trimmed,
         },

@@ -2,15 +2,9 @@
 import { Button } from "@/app/_ui";
 import type { EndpointVM } from "@/src/viewer/model";
 import type { Scenario, ScenarioStep } from "@/app/_lib/preview-store";
+import { newId } from "@/app/_lib/id";
 import { ScenarioNode } from "./ScenarioNode";
 import styles from "./scenarios.module.css";
-
-function newStepId(scenario: Scenario): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `step-${scenario.steps.length}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
 
 export function ScenarioCanvas({
   scenario,
@@ -38,7 +32,7 @@ export function ScenarioCanvas({
       steps: [
         ...scenario.steps,
         {
-          id: newStepId(scenario),
+          id: newId(),
           endpointKey: endpoints[0]?.key ?? "",
           expectedStatus: 200,
         },

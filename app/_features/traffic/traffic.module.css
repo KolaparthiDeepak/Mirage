@@ -70,6 +70,10 @@
   flex-wrap: wrap;
 }
 
+.toolbarEnd {
+  margin-left: auto;
+}
+
 .drawer {
   display: flex;
   flex-direction: column;

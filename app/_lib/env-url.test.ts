@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEnv, stripEnv } from "./env-url";
+import { applyEnv } from "./env-url";
 
 describe("applyEnv", () => {
   it("prefixes a relative url and trims a trailing slash off baseUrl", () => {
@@ -23,22 +23,6 @@ describe("applyEnv", () => {
   it("preserves the hash", () => {
     expect(applyEnv("http://localhost:3000/m/x#frag", { baseUrl: "https://qa.example.com" })).toBe(
       "https://qa.example.com/m/x#frag",
-    );
-  });
-});
-
-describe("stripEnv round-trip", () => {
-  it("preserves path + query", () => {
-    const env = { baseUrl: "https://qa.example.com" };
-    expect(stripEnv(applyEnv("/m/x?q=1", env), "http://localhost:3000")).toBe(
-      "http://localhost:3000/m/x?q=1",
-    );
-  });
-
-  it("preserves the hash", () => {
-    const env = { baseUrl: "https://qa.example.com" };
-    expect(stripEnv(applyEnv("/m/x?q=1#h", env), "http://localhost:3000")).toBe(
-      "http://localhost:3000/m/x?q=1#h",
     );
   });
 });

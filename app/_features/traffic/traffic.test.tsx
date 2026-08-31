@@ -5,6 +5,7 @@ import { ViewModelProvider } from "@/app/_lib/view-model-context";
 import { caseHref } from "@/app/_lib/nav";
 import { TrafficTable } from "./TrafficTable";
 import { TrafficDrawer } from "./TrafficDrawer";
+import { TrafficView } from "./TrafficView";
 import type { TrafficEntry } from "./sample-traffic";
 import TrafficPage from "@/app/(app)/p/[slug]/traffic/page";
 
@@ -119,6 +120,31 @@ describe("TrafficDrawer", () => {
     expect(screen.getByText(/"ok"/)).toBeDefined();
     fireEvent.click(screen.getByText("Replay request"));
     expect(push).toHaveBeenCalledWith(caseHref("demo", "GET_CARD", "c1"));
+  });
+});
+
+describe("TrafficView", () => {
+  const rows = entries.map((entry) => ({ entry, project }));
+
+  it("renders the toolbar, an Export button and a row per entry", () => {
+    render(<TrafficView rows={rows} exportName="x.json" />);
+    expect(screen.getByRole("button", { name: "Export" })).toBeDefined();
+    expect(screen.getAllByRole("row")).toHaveLength(entries.length + 1);
+  });
+
+  it("opens the drawer with the selected row's own project on click", () => {
+    render(<TrafficView rows={rows} exportName="x.json" />);
+    fireEvent.click(screen.getByText("10:42:31").closest("tr")!);
+    fireEvent.click(screen.getByText("Replay request"));
+    expect(push).toHaveBeenCalledWith(caseHref("demo", "GET_CARD", "c1"));
+  });
+
+  it("filters rows by the method select", () => {
+    render(<TrafficView rows={rows} exportName="x.json" />);
+    fireEvent.change(screen.getByLabelText("Filter by method"), {
+      target: { value: "POST" },
+    });
+    expect(screen.getAllByRole("row")).toHaveLength(2); // header + the one POST row
   });
 });
 

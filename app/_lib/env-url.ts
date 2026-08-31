@@ -9,13 +9,3 @@ export function applyEnv(url: string, env: { baseUrl: string }): string {
   }
   return base + (url.startsWith("/") ? "" : "/") + url;
 }
-
-/** Inverse of `applyEnv` — rebase `url` back onto `localOrigin`. */
-export function stripEnv(url: string, localOrigin: string): string {
-  const local = localOrigin.replace(/\/+$/, "");
-  if (/^https?:\/\//.test(url)) {
-    const u = new URL(url);
-    return local + u.pathname + u.search + u.hash;
-  }
-  return local + (url.startsWith("/") ? "" : "/") + url;
-}

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePreview } from "@/app/_lib/preview-store";
+import { newId } from "@/app/_lib/id";
 import { Button, Select, CopyButton } from "@/app/_ui";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import type { EndpointVM } from "@/src/viewer/model";
@@ -8,7 +9,7 @@ import { ruleYaml } from "@/app/_lib/rule-yaml";
 import { ConditionRow, type Condition } from "./ConditionRow";
 import styles from "./rules.module.css";
 
-const BLANK: Condition = { field: "", op: "equals", value: "" };
+const blank = (): Condition => ({ id: newId(), field: "", op: "equals", value: "" });
 
 export function RuleBuilder({
   slug,
@@ -32,7 +33,7 @@ export function RuleBuilder({
       const real = draft.filter((d) => d.op !== "");
       if (real.length > 0) {
         setConditions(
-          real.map((d) => ({ field: d.field, op: d.op, value: d.value })),
+          real.map((d) => ({ id: d.id, field: d.field, op: d.op, value: d.value })),
         );
       }
     }
@@ -49,8 +50,8 @@ export function RuleBuilder({
         ...s.rulesDraft,
         [endpoint.key]:
           nextConditions.length > 0
-            ? nextConditions.map((c, i) => ({
-                id: `${endpoint.key}-${i}`,
+            ? nextConditions.map((c) => ({
+                id: c.id,
                 field: c.field,
                 op: c.op,
                 value: c.value,
@@ -79,7 +80,7 @@ export function RuleBuilder({
 
       {conditions.map((c, i) => (
         <ConditionRow
-          key={i}
+          key={c.id}
           condition={c}
           onChange={(next) =>
             sync(
@@ -99,7 +100,7 @@ export function RuleBuilder({
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => sync([...conditions, { ...BLANK }], caseId)}
+        onClick={() => sync([...conditions, blank()], caseId)}
       >
         Add condition
       </Button>

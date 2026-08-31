@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePreview } from "@/app/_lib/preview-store";
 import type { Variable } from "@/app/_lib/preview-store";
+import { newId } from "@/app/_lib/id";
 import { Button, Input, Modal, Select } from "@/app/_ui";
 import styles from "./variables.module.css";
 
@@ -19,7 +20,7 @@ export function AddVariableModal({ open, onClose }: { open: boolean; onClose: ()
       variables: [
         ...s.variables,
         {
-          id: globalThis.crypto?.randomUUID?.() ?? `var-${s.variables.length}-${Date.now()}`,
+          id: newId(),
           key: name.trim(),
           value: value.trim(),
           scope,

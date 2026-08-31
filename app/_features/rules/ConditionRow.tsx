@@ -5,6 +5,7 @@ import styles from "./rules.module.css";
 const OPS = ["equals", "notEquals", "contains", "regex", "exists"];
 
 export interface Condition {
+  id: string;
   field: string;
   op: string;
   value: string;
