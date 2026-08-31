@@ -9,6 +9,7 @@ type ComboEvent = Pick<KeyboardEvent, "key"> & {
   metaKey?: boolean;
   ctrlKey?: boolean;
   shiftKey?: boolean;
+  altKey?: boolean;
 };
 
 export function matchCombo(e: ComboEvent): Combo | null {
@@ -18,6 +19,9 @@ export function matchCombo(e: ComboEvent): Combo | null {
   else if (key === "enter") key = "enter";
 
   if (key === "esc") return "esc";
+  // Alt as the only modifier is a distinct combo space (⌥-chars, readline) — the
+  // !mod guard below already drops it; kept explicit so intent survives edits.
+  if (e.altKey && !mod) return null;
   if (!mod) return null;
 
   const parts: string[] = ["mod"];
@@ -26,7 +30,7 @@ export function matchCombo(e: ComboEvent): Combo | null {
   return parts.join("+");
 }
 
-export const ALWAYS_ALLOWED: Combo[] = ["mod+enter", "esc"];
+export const ALWAYS_ALLOWED: Combo[] = ["mod+enter", "esc", "mod+k"];
 
 export function useShortcuts(map: ShortcutMap): void {
   useEffect(() => {

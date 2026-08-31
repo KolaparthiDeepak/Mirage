@@ -17,6 +17,9 @@ describe("matchCombo", () => {
   it("returns null for a bare key", () => {
     expect(matchCombo({ key: "a" })).toBeNull();
   });
+  it("returns null when Alt is the only modifier", () => {
+    expect(matchCombo({ altKey: true, key: "k" })).toBeNull();
+  });
   it("maps mod+enter", () => {
     expect(matchCombo({ metaKey: true, key: "Enter" })).toBe("mod+enter");
   });
@@ -46,6 +49,19 @@ describe("useShortcuts", () => {
     (document.querySelector("[data-testid=field]") as HTMLInputElement).focus();
     fireEvent.keyDown(window, { key: "e", metaKey: true });
     expect(h).not.toHaveBeenCalled();
+  });
+
+  it("allows mod+k even while typing in an input (palette must open from search)", () => {
+    const h = vi.fn();
+    render(
+      <>
+        <input data-testid="field" />
+        <Probe map={{ "mod+k": h }} />
+      </>,
+    );
+    (document.querySelector("[data-testid=field]") as HTMLInputElement).focus();
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(h).toHaveBeenCalledTimes(1);
   });
 
   it("allows mod+enter even while typing in an input", () => {
