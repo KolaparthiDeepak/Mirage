@@ -9,6 +9,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import type { CaseVM } from "@/src/viewer/model";
 import type { Verdict } from "@/src/viewer/verdict";
 import { ToastProvider } from "@/app/_ui";
+import { PreviewProvider, usePreview } from "@/app/_lib/preview-store";
 import { RequestBuilder } from "./RequestBuilder";
 import { ResponseViewer } from "./ResponseViewer";
 import { VerdictLine } from "./VerdictLine";
@@ -16,10 +17,24 @@ import { VerdictLine } from "./VerdictLine";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 const renderT = (ui: React.ReactElement) =>
-  render(<ToastProvider>{ui}</ToastProvider>);
+  render(
+    <PreviewProvider>
+      <ToastProvider>{ui}</ToastProvider>
+    </PreviewProvider>,
+  );
+
+function EnvProbe({ to }: { to: string }) {
+  const { set } = usePreview();
+  return (
+    <button onClick={() => set((s) => ({ ...s, activeEnvId: to }))}>
+      env-{to}
+    </button>
+  );
+}
 
 const fixture: CaseVM = {
   id: "case-1",
@@ -63,7 +78,8 @@ describe("RequestBuilder", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
 
     const [calledUrl, init] = fetchMock.mock.calls[0]!;
-    expect(calledUrl).toBe("http://localhost/m/demo/x");
+    // Local env (http://localhost:3000) rebases the absolute draft URL.
+    expect(calledUrl).toBe("http://localhost:3000/m/demo/x");
     expect(init.method).toBe("POST");
     expect(init.body).toBe('{"a":1}');
     expect(init.headers).toEqual({ "content-type": "application/json" });
@@ -124,6 +140,50 @@ describe("RequestBuilder", () => {
     vi.stubGlobal("fetch", vi.fn());
     renderT(<RequestBuilder case_={fixture} />);
     expect(screen.getByText(/templated field/)).toBeDefined();
+  });
+});
+
+describe("RequestBuilder × active environment", () => {
+  const envFixture = {
+    ...fixture,
+    request: {
+      ...fixture.request,
+      method: "GET",
+      url: "/m/card-block-lost/commands/x/GET_CARD/v1",
+    },
+  } as CaseVM;
+
+  it("reflects the active env in the URL, and execute() fetches it as shown", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <PreviewProvider>
+        <ToastProvider>
+          <EnvProbe to="qa" />
+          <RequestBuilder case_={envFixture} />
+        </ToastProvider>
+      </PreviewProvider>,
+    );
+
+    const input = screen.getByLabelText("Request URL") as HTMLInputElement;
+    expect(input.value).toBe(
+      "http://localhost:3000/m/card-block-lost/commands/x/GET_CARD/v1",
+    );
+    expect(screen.queryByText(/^env:/)).toBeNull();
+
+    fireEvent.click(screen.getByText("env-qa"));
+
+    await waitFor(() =>
+      expect(input.value).toContain("qa.mockservers.dailyuze.com"),
+    );
+    expect(screen.getByText("env: QA")).toBeDefined();
+
+    fireEvent.click(screen.getByText("Execute"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock.mock.calls[0]![0]).toBe(input.value);
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://qa.mockservers.dailyuze.com/m/card-block-lost/commands/x/GET_CARD/v1",
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { render, screen, fireEvent, cleanup, within } from "@testing-library/rea
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { ProjectVM } from "@/src/viewer/model";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
+import { PreviewProvider } from "@/app/_lib/preview-store";
 import { ToastProvider } from "@/app/_ui";
 import { EndpointWorkspace } from "./EndpointWorkspace";
 import EndpointsPage from "@/app/(app)/p/[slug]/endpoints/page";
@@ -75,9 +76,11 @@ afterEach(() => {
 describe("EndpointWorkspace", () => {
   it("reflects ?e= / ?c= selection across the three columns", () => {
     render(
-      <ToastProvider>
-        <EndpointWorkspace project={project} />
-      </ToastProvider>,
+      <PreviewProvider>
+        <ToastProvider>
+          <EndpointWorkspace project={project} />
+        </ToastProvider>
+      </PreviewProvider>,
     );
 
     const lists = screen.getAllByRole("listbox");
@@ -93,9 +96,11 @@ describe("EndpointWorkspace", () => {
 
   it("selecting another endpoint replaces ?e= and clears ?c=", () => {
     render(
-      <ToastProvider>
-        <EndpointWorkspace project={project} />
-      </ToastProvider>,
+      <PreviewProvider>
+        <ToastProvider>
+          <EndpointWorkspace project={project} />
+        </ToastProvider>
+      </PreviewProvider>,
     );
     fireEvent.click(screen.getByText("EP2"));
     expect(nav.replace).toHaveBeenCalledTimes(1);
@@ -107,9 +112,11 @@ describe("EndpointWorkspace", () => {
   it("shows an empty state when no case is selected", () => {
     nav.sp = new URLSearchParams("e=EP1");
     render(
-      <ToastProvider>
-        <EndpointWorkspace project={project} />
-      </ToastProvider>,
+      <PreviewProvider>
+        <ToastProvider>
+          <EndpointWorkspace project={project} />
+        </ToastProvider>
+      </PreviewProvider>,
     );
     expect(screen.getByText("Pick a case")).toBeDefined();
   });

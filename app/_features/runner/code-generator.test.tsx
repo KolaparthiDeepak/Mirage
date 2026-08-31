@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { RequestDraft } from "@/src/viewer/curl";
 import { ToastProvider } from "@/app/_ui";
+import { PreviewProvider, usePreview } from "@/app/_lib/preview-store";
 import { CodeGenerator } from "./CodeGenerator";
 
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
@@ -16,9 +17,19 @@ function stubClipboard(writeText: (v: string) => Promise<void>) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  sessionStorage.clear();
   if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
   else delete (navigator as { clipboard?: unknown }).clipboard;
 });
+
+function EnvProbe({ to }: { to: string }) {
+  const { set } = usePreview();
+  return (
+    <button onClick={() => set((s) => ({ ...s, activeEnvId: to }))}>
+      env-{to}
+    </button>
+  );
+}
 
 const draft: RequestDraft = {
   method: "POST",
@@ -30,9 +41,12 @@ const draft: RequestDraft = {
 
 function renderGen(props: Partial<Parameters<typeof CodeGenerator>[0]> = {}) {
   return render(
-    <ToastProvider>
-      <CodeGenerator draft={draft} {...props} />
-    </ToastProvider>,
+    <PreviewProvider>
+      <ToastProvider>
+        <EnvProbe to="qa" />
+        <CodeGenerator draft={draft} {...props} />
+      </ToastProvider>
+    </PreviewProvider>,
   );
 }
 
@@ -45,6 +59,18 @@ describe("CodeGenerator", () => {
     // becomes the real origin. Either is acceptable.
     await waitFor(() =>
       expect(pre.textContent).toContain(window.location.origin),
+    );
+    expect(pre.textContent).not.toContain("$ORIGIN");
+  });
+
+  it("resolves $ORIGIN to the active env baseUrl when it is not Local", async () => {
+    const { container } = renderGen();
+    fireEvent.click(screen.getByText("env-qa"));
+    const pre = container.querySelector("pre")!;
+    await waitFor(() =>
+      expect(pre.textContent).toContain(
+        "https://qa.mockservers.dailyuze.com/m/x",
+      ),
     );
     expect(pre.textContent).not.toContain("$ORIGIN");
   });

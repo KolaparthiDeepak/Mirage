@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
-import { Button, Select } from "@/app/_ui";
+import { useEffect, useState } from "react";
+import { Badge, Button, Select } from "@/app/_ui";
+import { usePreview } from "@/app/_lib/preview-store";
+import { applyEnv } from "@/app/_lib/env-url";
 import { parseHeaderLines } from "@/app/_lib/format";
 import { classifyResult } from "@/src/viewer/verdict";
 import type { CaseVM } from "@/src/viewer/model";
@@ -27,14 +29,20 @@ export function RequestBuilder({
   onExecuted?: () => void;
 }) {
   const draft = case_.request;
+  const { activeEnv } = usePreview();
   const [method, setMethod] = useState(draft.method);
-  const [url, setUrl] = useState(draft.url);
+  const [url, setUrl] = useState(() => applyEnv(draft.url, activeEnv));
   const [headersText, setHeadersText] = useState(seedHeaders(draft.headers));
   const [body, setBody] = useState(draft.body ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RunResult | null>(null);
   const [activeTab, setActiveTab] = useState("body");
+
+  // re-seeding from the case discards a manual URL edit on env switch — acceptable for a preview affordance
+  useEffect(() => {
+    setUrl(applyEnv(case_.request.url, activeEnv));
+  }, [activeEnv, case_.request.url]);
 
   async function execute() {
     setBusy(true);
@@ -43,6 +51,7 @@ export function RequestBuilder({
     const noBody = ["GET", "HEAD"].includes(method) || body.trim() === "";
     const started = performance.now();
     try {
+      // the fetch targets the URL as shown; picking a non-local env and executing will fail at the network layer — honest behavior (design doc §7)
       const res = await fetch(url, {
         method,
         headers: parseHeaderLines(headersText),
@@ -70,7 +79,7 @@ export function RequestBuilder({
 
   function reset() {
     setMethod(draft.method);
-    setUrl(draft.url);
+    setUrl(applyEnv(draft.url, activeEnv));
     setHeadersText(seedHeaders(draft.headers));
     setBody(draft.body ?? "");
     setResult(null);
@@ -105,6 +114,9 @@ export function RequestBuilder({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
+        {activeEnv.id !== "local" && (
+          <Badge tone="warning">env: {activeEnv.name}</Badge>
+        )}
         <Button variant="primary" onClick={execute} disabled={busy}>
           {busy ? "Running…" : "Execute"}
         </Button>

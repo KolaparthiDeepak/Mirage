@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { MutableRefObject } from "react";
 import { Button, Tabs, useToast } from "@/app/_ui";
 import { copyToClipboard } from "@/app/_lib/clipboard";
+import { usePreview } from "@/app/_lib/preview-store";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import type { RequestDraft } from "@/src/viewer/curl";
 import styles from "./runner.module.css";
@@ -24,11 +25,19 @@ export function CodeGenerator({
 }) {
   const [active, setActive] = useState("curl");
   const toast = useToast();
+  const { activeEnv } = usePreview();
 
   // $ORIGIN resolves after mount so SSR and first client paint both emit the
   // literal placeholder (hydration-safe); the block corrects itself next paint.
+  // A non-local active env resolves to that env's baseUrl so the cURL matches it.
   const [origin, setOrigin] = useState("$ORIGIN");
-  useEffect(() => setOrigin(window.location.origin), []);
+  useEffect(() => {
+    setOrigin(
+      activeEnv.id !== "local"
+        ? activeEnv.baseUrl.replace(/\/+$/, "")
+        : window.location.origin,
+    );
+  }, [activeEnv.id, activeEnv.baseUrl]);
   const resolvedCurl = draft.curl.split("$ORIGIN").join(origin);
 
   const copyCurl = useCallback(async () => {
