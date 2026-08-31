@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { Kbd } from "@/app/_ui";
 import { toggleTheme } from "@/app/_lib/theme";
 import { ProjectSwitcher } from "./ProjectSwitcher";
+import { GlobalSearch } from "./GlobalSearch";
 import styles from "./shell.module.css";
 
 export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -41,6 +42,7 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
       <div className={styles.topbarRight}>
         {inProject ? <ProjectSwitcher /> : null}
+        <GlobalSearch />
         <Kbd>⌘K</Kbd>
         <span className={styles.status}>
           <span className={styles.statusDot} aria-hidden="true" />
