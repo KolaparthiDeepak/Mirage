@@ -63,13 +63,22 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  flex: 1;
   min-width: 0;
+}
+
+/* Pill + "N cases" meta must never shrink — only the labels column flexes. */
+.row > *:not(.labels) {
+  flex-shrink: 0;
 }
 
 .code {
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sub {
@@ -97,9 +106,10 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: 232px 288px 1fr;
+  grid-template-columns: minmax(0, 232px) minmax(0, 300px) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
+  max-width: 100%;
 }
 
 .mobileTabs {

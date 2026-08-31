@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { useState } from "react";
 import type { EndpointVM } from "@/src/viewer/model";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
 import { EndpointList } from "./EndpointList";
+import { EndpointRow } from "./EndpointRow";
 import EndpointsPage from "@/app/(app)/p/[slug]/endpoints/page";
 
 const push = vi.fn();
@@ -85,6 +88,30 @@ describe("EndpointList", () => {
     const rows = screen.getAllByRole("option");
     fireEvent.keyDown(rows[2]!, { key: "Enter" });
     expect(rows[2]!.getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("EndpointRow truncation", () => {
+  it("keeps the name and its meta rendered for a very long mono name", () => {
+    const long = ep(
+      "CHECK_CARD_ELIGIBILITY_FOR_INTERNATIONAL_TRANSACTIONS_AND_MORE",
+      "POST",
+      12,
+      "A summary long enough to overflow the endpoints column many times over",
+    );
+    render(<EndpointRow endpoint={long} />);
+    expect(screen.getByText(long.key)).toBeDefined();
+    expect(screen.getByText("12 cases")).toBeDefined();
+  });
+
+  it(".code carries the ellipsis rule in the CSS module", () => {
+    const css = readFileSync(
+      join(process.cwd(), "app/_features/endpoints/endpoints.module.css"),
+      "utf8",
+    );
+    const block = css.match(/\.code\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(block).toMatch(/text-overflow:\s*ellipsis/);
+    expect(block).toMatch(/overflow:\s*hidden/);
   });
 });
 

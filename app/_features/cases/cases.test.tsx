@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { useState } from "react";
 import type { CaseVM, EndpointVM } from "@/src/viewer/model";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
 import { CaseList } from "./CaseList";
+import { CaseRow } from "./CaseRow";
 import CasesPage from "@/app/(app)/p/[slug]/cases/page";
 
 vi.mock("next/navigation", () => ({
@@ -101,6 +104,28 @@ describe("Cases page", () => {
     expect(screen.getByText("Expected body")).toBeDefined();
     // c3 expects a 404 — shown in the row and again in the detail rail.
     expect(screen.getAllByText("404").length).toBeGreaterThan(1);
+  });
+});
+
+describe("CaseRow truncation", () => {
+  it("renders a long case label and its status code without collision or throw", () => {
+    const long = mk("locate-card-service-down-when-upstream-is-completely-unavailable", {
+      match: [{ jsonPath: "$.request.headers.x-very-long-header-name", equals: "some-long-value" }],
+      expected: { status: 500, body: null },
+    });
+    render(<CaseRow case_={long} />);
+    expect(screen.getByText(long.label)).toBeDefined();
+    expect(screen.getByText("500")).toBeDefined();
+  });
+
+  it(".label carries the ellipsis rule in the CSS module", () => {
+    const css = readFileSync(
+      join(process.cwd(), "app/_features/cases/cases.module.css"),
+      "utf8",
+    );
+    const block = css.match(/\n\.label\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(block).toMatch(/text-overflow:\s*ellipsis/);
+    expect(block).toMatch(/overflow:\s*hidden/);
   });
 });
 

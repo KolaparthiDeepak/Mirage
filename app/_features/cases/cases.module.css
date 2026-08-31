@@ -62,20 +62,30 @@
 }
 
 .label {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .match {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-left: var(--space-2);
   font-size: 12px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* dot, "generated" badge, status code and the ⋯ menu keep their size. */
+.row > *:not(.label):not(.match) {
+  flex-shrink: 0;
 }
 
 .overflow {
