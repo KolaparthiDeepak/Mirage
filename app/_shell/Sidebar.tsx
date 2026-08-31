@@ -22,8 +22,7 @@ function projectItems(slug: string): NavItem[] {
     // TODO(phase-4): drop `soon` when /p/<slug>/scenarios lands
     { label: "Scenarios", href: `/p/${slug}/scenarios`, soon: true },
     { label: "Environments", href: `/p/${slug}/environments` },
-    // TODO(phase-4): drop `soon` when /p/<slug>/variables lands
-    { label: "Variables", href: `/p/${slug}/variables`, soon: true },
+    { label: "Variables", href: `/p/${slug}/variables` },
   ];
 }
 
