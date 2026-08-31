@@ -16,6 +16,7 @@ export function CaseRow({
   onSelect?: () => void;
 }) {
   function onKeyDown(ev: KeyboardEvent<HTMLDivElement>) {
+    if (ev.target !== ev.currentTarget) return; // ignore keys from nested controls (⋯ menu)
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
       onSelect?.();
@@ -26,7 +27,7 @@ export function CaseRow({
   return (
     <div
       role="option"
-      tabIndex={0}
+      tabIndex={selected ? 0 : -1}
       aria-selected={!!selected}
       className={case_.isOpenApiGenerated ? `${styles.row} ${styles.rowGenerated}` : styles.row}
       onClick={() => onSelect?.()}
