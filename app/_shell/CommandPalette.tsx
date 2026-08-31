@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Badge, Modal, MethodPill, StatusCode, useToast } from "@/app/_ui";
@@ -8,6 +8,8 @@ import { searchViewModel } from "@/app/_lib/search";
 import { commandCode } from "@/app/_lib/endpoint-label";
 import { toggleTheme } from "@/app/_lib/theme";
 import { mockBaseUrl } from "@/app/_lib/mock-url";
+import { copyToClipboard } from "@/app/_lib/clipboard";
+import { projectHref, endpointHref, caseHref } from "@/app/_lib/nav";
 import styles from "./shell.module.css";
 
 interface Command {
@@ -32,6 +34,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const searchParams = useSearchParams();
   const model = useViewModel();
   const toast = useToast();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
 
   const slug = pathname.match(/^\/p\/([^/]+)/)?.[1] ?? "";
   const project = useProject(slug);
@@ -39,6 +43,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const [query, setQuery] = useState("");
   const [highlightIndex, setHighlightIndex] = useState(0);
+
+  const copy = useCallback(
+    async (text: string, okMsg: string) => {
+      toast((await copyToClipboard(text)) ? okMsg : "Couldn't copy to clipboard");
+    },
+    [toast],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -72,10 +83,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         {
           id: "copy-url",
           label: "Copy mock base URL",
-          run: () => {
-            navigator.clipboard?.writeText(mockBaseUrl(s, project.basePath));
-            toast("Mock base URL copied");
-          },
+          run: () => copy(mockBaseUrl(s, project.basePath), "Mock base URL copied"),
         },
         { id: "go-overview", label: "Open Overview", run: () => router.push(`/p/${s}`) },
         { id: "go-eps", label: "Open Endpoints", run: () => router.push(`/p/${s}/endpoints`) },
@@ -109,20 +117,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             {
               id: "copy-curl",
               label: "Copy cURL for selected case",
-              run: () => {
-                const resolved = found.case.request.curl
-                  .split("$ORIGIN")
-                  .join(window.location.origin);
-                navigator.clipboard?.writeText(resolved);
-                toast("cURL copied");
-              },
+              run: () =>
+                copy(
+                  found.case.request.curl.split("$ORIGIN").join(window.location.origin),
+                  "cURL copied",
+                ),
             },
           );
         }
       }
     }
     return list;
-  }, [router, toast, project, caseId]);
+  }, [router, toast, copy, project, caseId]);
 
   const q = query.trim().toLowerCase();
 
@@ -144,7 +150,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const r = searchViewModel(model, query);
     const rows: Row[] = [];
     for (const p of r.projects) {
-      const href = `/p/${p.slug}`;
+      const href = projectHref(p.slug);
       rows.push({
         key: `p:${p.slug}`,
         content: (
@@ -159,7 +165,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       });
     }
     for (const { project: p, endpoint } of r.endpoints) {
-      const href = `/p/${p.slug}/endpoints?e=${encodeURIComponent(endpoint.key)}`;
+      const href = endpointHref(p.slug, endpoint.key);
       rows.push({
         key: `e:${p.slug}:${endpoint.key}`,
         content: (
@@ -175,7 +181,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       });
     }
     for (const { project: p, endpoint, case: c } of r.cases) {
-      const href = `/p/${p.slug}/endpoints?e=${encodeURIComponent(endpoint.key)}&c=${encodeURIComponent(c.id)}`;
+      const href = caseHref(p.slug, endpoint.key, c.id);
       rows.push({
         key: `c:${p.slug}:${endpoint.key}:${c.id}`,
         content: (
@@ -195,6 +201,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const rows = useMemo(() => [...commandRows, ...resultRows], [commandRows, resultRows]);
 
+  // Keep the highlight in range when the row set shrinks (M-12).
+  useEffect(() => {
+    setHighlightIndex((i) => Math.min(i, Math.max(0, rows.length - 1)));
+  }, [rows.length]);
+
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -208,18 +219,24 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  const activeRowId = rows.length > 0 ? `${listId}-${highlightIndex}` : undefined;
+
   return (
-    <Modal open={open} onClose={onClose} title="Command palette">
+    <Modal open={open} onClose={onClose} title="Command palette" initialFocusRef={inputRef}>
       <div className={styles.palette} onKeyDown={onKeyDown}>
         <input
-          autoFocus
+          ref={inputRef}
+          role="combobox"
+          aria-expanded={rows.length > 0}
+          aria-controls={listId}
+          aria-activedescendant={activeRowId}
           aria-label="Command or search"
           className={styles.paletteInput}
           placeholder="Type a command or search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div className={styles.paletteList}>
+        <div className={styles.paletteList} role="listbox" id={listId}>
           {rows.map((row, i) => (
             <Fragment key={row.key}>
               {i === commandRows.length && resultRows.length > 0 && (
@@ -227,6 +244,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               )}
               <button
                 type="button"
+                role="option"
+                id={`${listId}-${i}`}
+                aria-selected={i === highlightIndex}
                 className={
                   i === highlightIndex
                     ? `${styles.searchRow} ${styles.searchRowActive}`

@@ -25,23 +25,49 @@ const model = {
 
 afterEach(() => cleanup());
 
+function renderShell() {
+  return render(
+    <ViewModelProvider model={model as never}>
+      <PreviewProvider>
+        <ToastProvider>
+          <AppShell>
+            <div>child</div>
+          </AppShell>
+        </ToastProvider>
+      </PreviewProvider>
+    </ViewModelProvider>,
+  );
+}
+
 describe("AppShell", () => {
-  it("opens the command palette on ⌘K", () => {
-    render(
-      <ViewModelProvider model={model as never}>
-        <PreviewProvider>
-          <ToastProvider>
-            <AppShell>
-              <div>child</div>
-            </AppShell>
-          </ToastProvider>
-        </PreviewProvider>
-      </ViewModelProvider>,
-    );
+  it("opens the command palette on ⌘K with focus on its input", () => {
+    renderShell();
 
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByLabelText("Command or search")).toBeDefined();
+    const input = within(dialog).getByLabelText("Command or search");
+    expect(input).toBeDefined();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("⌘K opens the palette even while another input is focused", () => {
+    renderShell();
+
+    const search = screen.getByLabelText("Search Mirage") as HTMLInputElement;
+    search.focus();
+    expect(document.activeElement).toBe(search);
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
+  it("⌘K toggles the palette closed again", () => {
+    renderShell();
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.getByRole("dialog")).toBeDefined();
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

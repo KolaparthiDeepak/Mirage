@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
 import { ToastProvider } from "@/app/_ui";
@@ -43,9 +43,13 @@ const fixture = {
   ],
 };
 
+const originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+
 afterEach(() => {
   push.mockClear();
   toggleTheme.mockClear();
+  if (originalClipboard) Object.defineProperty(navigator, "clipboard", originalClipboard);
+  else delete (navigator as { clipboard?: unknown }).clipboard;
   cleanup();
 });
 
@@ -72,6 +76,31 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Copy mock base URL")).toBeDefined();
     const newEp = screen.getByText("New endpoint").closest("button") as HTMLButtonElement;
     expect(within(newEp).getByText("Preview")).toBeDefined();
+  });
+
+  it("runs the highlighted command on ArrowDown + Enter", () => {
+    setup();
+    const input = screen.getByLabelText("Command or search");
+    fireEvent.keyDown(input, { key: "ArrowDown" }); // move off 'Toggle theme' to 'Go to Projects'
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(push).toHaveBeenCalledWith("/projects");
+  });
+
+  it("'Copy mock base URL' writes to the clipboard and toasts", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    setup();
+    fireEvent.click(screen.getByText("Copy mock base URL").closest("button")!);
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(await screen.findByText("Mock base URL copied")).toBeDefined();
+  });
+
+  it("shows inline search-result rows for a typed query", () => {
+    setup();
+    const input = screen.getByLabelText("Command or search");
+    fireEvent.change(input, { target: { value: "card" } });
+    expect(screen.getByText("Results")).toBeDefined();
+    expect(screen.getByText("/card-block-lost")).toBeDefined();
   });
 
   it("filters commands by label and empties on no match", () => {

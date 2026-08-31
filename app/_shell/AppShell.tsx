@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Drawer, useToast } from "@/app/_ui";
 import { useShortcuts } from "@/app/_lib/shortcuts";
@@ -19,11 +19,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     setPaletteOpen(false);
   }, [pathname]);
 
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), []);
+
   // mod+enter (execute) and mod+shift+c (copy cURL) are handled locally in RequestBuilder / EndpointWorkspace.
   const shortcutMap = useMemo(
     () => ({
       "mod+k": () => setPaletteOpen((o) => !o),
-      "mod+p": () => setPaletteOpen(true), // opens the palette (Switch project lives there); acceptable
+      "mod+p": openPalette, // opens the palette (Switch project lives there); acceptable
       "mod+e": () => toast("Preview — add endpoints via the repo"),
       "mod+s": () => toast("Preview — cases are defined in the repo"),
       esc: () => {
@@ -31,16 +34,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         setPaletteOpen(false);
       },
     }),
-    [toast],
+    [toast, openPalette],
   );
   useShortcuts(shortcutMap);
 
   return (
     <div className={styles.shell}>
-      <TopBar
-        onMenuClick={() => setNavOpen(true)}
-        onOpenPalette={() => setPaletteOpen(true)}
-      />
+      <TopBar onMenuClick={() => setNavOpen(true)} onOpenPalette={openPalette} />
       <Sidebar className={styles.sidebarDocked} />
       <main className={styles.main}>{children}</main>
 
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Suspense: CommandPalette reads useSearchParams; keeps static pages prerenderable. */}
       <Suspense fallback={null}>
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        <CommandPalette open={paletteOpen} onClose={closePalette} />
       </Suspense>
     </div>
   );
