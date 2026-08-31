@@ -217,7 +217,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const activeRowId = rows.length > 0 ? `${listId}-${highlightIndex}` : undefined;
 
   return (
-    <Modal open={open} onClose={onClose} title="Command palette" initialFocusRef={inputRef}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Command palette"
+      hideTitleVisually
+      initialFocusRef={inputRef}
+    >
       <div className={styles.palette} onKeyDown={onKeyDown}>
         <input
           ref={inputRef}

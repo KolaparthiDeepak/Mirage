@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { Modal, Drawer, Tabs, Dropdown, useToast } from "./index";
+import { Modal, Drawer, Tabs, Dropdown, Tooltip, useToast } from "./index";
 
 afterEach(() => cleanup());
 
@@ -25,6 +25,34 @@ describe("Modal", () => {
     expect(
       screen.getByRole("dialog", { hidden: true }).hasAttribute("hidden"),
     ).toBe(true);
+  });
+
+  it("hideTitleVisually keeps the heading in the a11y tree with aria-labelledby intact", () => {
+    render(
+      <Modal open hideTitleVisually onClose={() => {}} title="Command palette">
+        <p>x</p>
+      </Modal>,
+    );
+    const heading = screen.getByRole("heading", { name: "Command palette" });
+    expect(heading.className).toMatch(/visuallyHidden/);
+    expect(heading.id).toBeTruthy();
+    expect(screen.getByRole("dialog").getAttribute("aria-labelledby")).toBe(heading.id);
+  });
+});
+
+describe("Tooltip", () => {
+  it("puts aria-describedby on the child element, pointing at the role=tooltip tip", () => {
+    render(
+      <Tooltip label="hi">
+        <button>x</button>
+      </Tooltip>,
+    );
+    const btn = screen.getByRole("button", { name: "x" });
+    const id = btn.getAttribute("aria-describedby");
+    expect(id).toBeTruthy();
+    const tip = document.getElementById(id!);
+    expect(tip?.getAttribute("role")).toBe("tooltip");
+    expect(tip?.textContent).toBe("hi");
   });
 });
 
@@ -94,6 +122,27 @@ describe("Tabs", () => {
 });
 
 describe("Dropdown", () => {
+  it("ArrowDown moves focus to the next item; Esc closes and restores trigger focus", () => {
+    render(
+      <Dropdown
+        trigger={<span>menu</span>}
+        items={[
+          { label: "One", onSelect: vi.fn() },
+          { label: "Two", onSelect: vi.fn() },
+        ]}
+      />,
+    );
+    const trigger = screen.getByRole("button");
+    fireEvent.click(trigger);
+    const items = screen.getAllByRole("menuitem");
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(items[0]!, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(items[1]!, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("does not fire onSelect for a disabled item", () => {
     const onSelect = vi.fn();
     render(

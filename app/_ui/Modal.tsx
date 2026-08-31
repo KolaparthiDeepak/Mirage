@@ -10,9 +10,18 @@ type Props = {
   children: ReactNode;
   /** Focused instead of the panel when the modal opens (e.g. a search input). */
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /** Keep the heading in the a11y tree but hide it visually (e.g. command palette). */
+  hideTitleVisually?: boolean;
 };
 
-export function Modal({ open, onClose, title, children, initialFocusRef }: Props) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  initialFocusRef,
+  hideTitleVisually,
+}: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const headingId = useId();
 
@@ -42,7 +51,10 @@ export function Modal({ open, onClose, title, children, initialFocusRef }: Props
         className={styles.modalPanel}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id={headingId} className={styles.dialogHeading}>
+        <h2
+          id={headingId}
+          className={hideTitleVisually ? styles.visuallyHidden : styles.dialogHeading}
+        >
           {title}
         </h2>
         {children}
