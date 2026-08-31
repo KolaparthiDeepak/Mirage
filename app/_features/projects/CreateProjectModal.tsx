@@ -12,6 +12,8 @@ const STARTERS = [
   { id: "example", label: "Example API", note: "Coming soon", dim: true },
 ] as const;
 
+type Mode = (typeof STARTERS)[number]["id"];
+
 export function CreateProjectModal({
   open,
   onClose,
@@ -20,6 +22,7 @@ export function CreateProjectModal({
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
+  const [mode, setMode] = useState<Mode>("blank");
   const [yaml, setYaml] = useState<string | null>(null);
   const slug = slugify(name) || "my-api";
 
@@ -42,17 +45,31 @@ export function CreateProjectModal({
         <div>
           <span className={styles.label}>Choose how to start</span>
           <div className={styles.startRow}>
-            {STARTERS.map((s) => (
-              <div
-                key={s.id}
-                className={styles.startCard}
-                data-selected={s.id === "blank"}
-                data-dim={"dim" in s && s.dim ? true : undefined}
-              >
-                <span className={styles.startCardLabel}>{s.label}</span>
-                <span className={styles.startCardNote}>{s.note}</span>
-              </div>
-            ))}
+            {STARTERS.map((s) => {
+              const dim = "dim" in s && s.dim;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={styles.startCard}
+                  data-selected={s.id === mode}
+                  data-dim={dim ? true : undefined}
+                  aria-disabled={dim || undefined}
+                  aria-pressed={s.id === mode}
+                  onClick={(e) => {
+                    if (dim) {
+                      e.preventDefault();
+                      return;
+                    }
+                    setMode(s.id);
+                    setYaml(null);
+                  }}
+                >
+                  <span className={styles.startCardLabel}>{s.label}</span>
+                  <span className={styles.startCardNote}>{s.note}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -62,7 +79,7 @@ export function CreateProjectModal({
             setYaml(yaml ? null : newProjectYaml({ name: name || "My API", slug }))
           }
         >
-          Create project
+          Generate YAML
         </Button>
 
         {yaml ? (
@@ -73,6 +90,13 @@ export function CreateProjectModal({
             <p className={styles.note}>
               Create <code>mocks/{slug}/project.yaml</code> with this and redeploy
               — the browser can&apos;t add projects.
+              {mode === "openapi" ? (
+                <>
+                  {" "}
+                  Also drop your spec file into{" "}
+                  <code>mocks/{slug}/openapi/</code>.
+                </>
+              ) : null}
             </p>
           </div>
         ) : null}
