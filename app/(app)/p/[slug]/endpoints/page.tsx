@@ -59,7 +59,8 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
     return [...m.entries()];
   }, [filtered]);
 
-  const onSelect = (key: string) => router.push(`/p/${slug}/endpoints?e=${key}`);
+  const onSelect = (key: string) =>
+    router.push(`/p/${slug}/endpoints?e=${encodeURIComponent(key)}`);
 
   return (
     <>

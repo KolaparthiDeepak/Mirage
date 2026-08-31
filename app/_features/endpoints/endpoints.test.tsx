@@ -122,6 +122,30 @@ describe("Endpoints page", () => {
     expect(push).toHaveBeenCalledWith("/p/demo/endpoints?e=GET_CARD");
   });
 
+  it("percent-encodes the endpoint key in the pushed URL and round-trips it", () => {
+    const spacedKey = "POST /demo/GET_CARD/v1";
+    const spaced = {
+      build: { commit: "x", builtAt: "", warnings: [] },
+      projects: [
+        {
+          slug: "demo",
+          name: "Demo",
+          caseCount: 0,
+          endpoints: [{ ...ep("GET_CARD", "GET", 1), key: spacedKey }],
+        },
+      ],
+    } as never;
+    render(
+      <ViewModelProvider model={spaced}>
+        <EndpointsPage params={resolvedParams("demo")} />
+      </ViewModelProvider>,
+    );
+    fireEvent.click(screen.getByText("GET_CARD"));
+    const url = push.mock.calls[0]![0] as string;
+    expect(url).toBe(`/p/demo/endpoints?e=${encodeURIComponent(spacedKey)}`);
+    expect(new URL(url, "http://x").searchParams.get("e")).toBe(spacedKey);
+  });
+
   it("switching to Grouped renders group labels", () => {
     renderPage();
     fireEvent.click(screen.getByRole("tab", { name: "Grouped" }));
