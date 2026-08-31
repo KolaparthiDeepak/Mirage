@@ -45,9 +45,8 @@ describe("Sidebar", () => {
     expect(screen.getByText("Cases")).toBeDefined();
     // Overview has a real route
     expect(screen.getByRole("link", { name: "Overview" })).toBeDefined();
-    // Rules is still `soon` -> text present but no link
-    expect(screen.getByText("Rules")).toBeDefined();
-    expect(screen.queryByRole("link", { name: "Rules" })).toBeNull();
+    // Rules is live now (Phase 5.2)
+    expect(screen.getByRole("link", { name: "Rules" })).toBeDefined();
     // workspace Traffic is live now (Phase 4)
     expect(screen.getByRole("link", { name: "Traffic" })).toBeDefined();
     // project Environments is live now (Phase 4.2)
