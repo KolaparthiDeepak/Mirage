@@ -2,13 +2,18 @@
 import { use, useEffect } from "react";
 import { useProject } from "@/app/_lib/view-model-context";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import { usePreview, type ScenarioStep } from "@/app/_lib/preview-store";
+import { usePreview, type Scenario, type ScenarioStep } from "@/app/_lib/preview-store";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
+import { Button, EmptyState } from "@/app/_ui";
 import { ScenarioToolbar } from "@/app/_features/scenarios/ScenarioToolbar";
 import { ScenarioCanvas } from "@/app/_features/scenarios/ScenarioCanvas";
 
 const SEED_STEPS = ["GET_CARD", "CHECK_CARD_ELIGIBILITY", "BLOCK_CARD", "NOTIFY_CUSTOMER"];
+
+const uid = (fallback: string) =>
+  globalThis.crypto?.randomUUID?.() ??
+  `${fallback}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function ScenariosPage({
   params,
@@ -21,9 +26,9 @@ export default function ScenariosPage({
 
   const list = state.scenarios[slug] ?? [];
 
-  // Seed a starter scenario the first time this project is opened. Guarded on
-  // `=== undefined` (not `[]`) so it never re-seeds once the store knows this
-  // project — including after the user clears its scenario.
+  // Seed a starter scenario the first time this project is opened — only when
+  // its endpoints carry the known command names. Guarded on `=== undefined`
+  // (not `[]`) so it never re-seeds once the store knows this project.
   useEffect(() => {
     if (state.scenarios[slug] !== undefined) return;
 
@@ -32,7 +37,7 @@ export default function ScenariosPage({
       const ep = project.endpoints.find((e) => commandCode(e.path) === name);
       if (ep) {
         steps.push({
-          id: crypto.randomUUID?.() ?? `seed-${steps.length}`,
+          id: uid("seed"),
           endpointKey: ep.key,
           expectedStatus: 200,
         });
@@ -44,15 +49,27 @@ export default function ScenariosPage({
       ...s,
       scenarios: {
         ...s.scenarios,
-        [slug]: [
-          { id: crypto.randomUUID?.() ?? "seed", name: "Card Blocking", steps },
-        ],
+        [slug]: [{ id: uid("seed"), name: "Card Blocking", steps }],
       },
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, state.scenarios]);
 
   const scenario = list[0];
+
+  function addFirstScenario() {
+    const first = project.endpoints[0];
+    if (!first) return;
+    const created: Scenario = {
+      id: uid("scenario"),
+      name: "New scenario",
+      steps: [{ id: uid("step"), endpointKey: first.key, expectedStatus: 200 }],
+    };
+    set((s) => ({
+      ...s,
+      scenarios: { ...s.scenarios, [slug]: [created] },
+    }));
+  }
 
   return (
     <>
@@ -90,7 +107,22 @@ export default function ScenariosPage({
             }
           />
         </>
-      ) : null}
+      ) : project.endpoints.length === 0 ? (
+        <EmptyState
+          title="No scenario yet"
+          body="Add endpoints to this project before building a request workflow."
+        />
+      ) : (
+        <EmptyState
+          title="No scenario yet"
+          body="Build a request workflow step by step."
+          action={
+            <Button variant="primary" onClick={addFirstScenario}>
+              Add first step
+            </Button>
+          }
+        />
+      )}
     </>
   );
 }

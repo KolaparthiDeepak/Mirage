@@ -17,7 +17,11 @@ export function ScenarioToolbar({
         onChange={(e) => onName(e.target.value)}
       />
       <Tooltip label="Preview — scenarios don't execute yet">
-        <Button variant="primary" disabled>
+        <Button
+          variant="primary"
+          aria-disabled={true}
+          onClick={(e) => e.preventDefault()}
+        >
           Run scenario
         </Button>
       </Tooltip>

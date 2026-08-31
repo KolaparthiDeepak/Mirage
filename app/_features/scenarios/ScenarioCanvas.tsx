@@ -7,7 +7,8 @@ import styles from "./scenarios.module.css";
 
 function newStepId(scenario: Scenario): string {
   return (
-    crypto.randomUUID?.() ?? `step-${scenario.steps.length}-${Date.now()}`
+    globalThis.crypto?.randomUUID?.() ??
+    `step-${scenario.steps.length}-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
 }
 

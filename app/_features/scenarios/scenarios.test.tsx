@@ -79,11 +79,11 @@ describe("ScenariosPage", () => {
     expect(screen.getByText("Step 3")).toBeDefined();
   });
 
-  it("disables the Run scenario button", () => {
+  it("marks the Run scenario button aria-disabled but keeps it focusable", () => {
     renderPage();
-    expect(
-      screen.getByRole("button", { name: "Run scenario" }),
-    ).toHaveProperty("disabled", true);
+    const btn = screen.getByRole("button", { name: "Run scenario" });
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    expect(btn).toHaveProperty("disabled", false);
   });
 
   it("writes an endpoint edit to the preview store", () => {
