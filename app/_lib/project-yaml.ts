@@ -11,8 +11,8 @@ export function projectYaml(input: {
 }): string {
   const lines = [
     `name: ${yamlScalar(input.name)}`,
-    `slug: ${input.slug}`,
+    `slug: ${yamlScalar(input.slug)}`,
   ];
-  if (input.basePath) lines.push(`basePath: ${input.basePath}`);
+  if (input.basePath) lines.push(`basePath: ${yamlScalar(input.basePath)}`);
   return lines.join("\n") + "\n";
 }

@@ -14,10 +14,10 @@ describe("ruleYaml", () => {
       "/acropolis-card-mgmt/GET_CARD/v1",
     );
     expect(out).toBe(
-      `- id: locate-card-not-found
+      `- id: "locate-card-not-found"
   request:
-    method: POST
-    path: /acropolis-card-mgmt/GET_CARD/v1
+    method: "POST"
+    path: "/acropolis-card-mgmt/GET_CARD/v1"
     match: [{ jsonPath: $.cardLast4, equals: "0001" }, { header: X-Env, contains: "qa" }]
   response: { status: 200, body: {} }
 `,
@@ -27,10 +27,10 @@ describe("ruleYaml", () => {
   it("omits the match line when there are no conditions", () => {
     const out = ruleYaml([], "fallback-case", "GET", "/thing/v1");
     expect(out).toBe(
-      `- id: fallback-case
+      `- id: "fallback-case"
   request:
-    method: GET
-    path: /thing/v1
+    method: "GET"
+    path: "/thing/v1"
   response: { status: 200, body: {} }
 `,
     );
@@ -67,6 +67,18 @@ describe("ruleYaml", () => {
     expect(out).toContain(String.raw`equals: "he said \"hi\""`);
     const match = parse(out)[0].request.match;
     expect(match).toEqual([{ jsonPath: "$.msg", equals: 'he said "hi"' }]);
+  });
+
+  it("escapes a value containing a newline — stays one condition, no injected keys", () => {
+    const out = ruleYaml(
+      [{ field: "body.msg", op: "equals", value: "a\nstatus: 500" }],
+      "c",
+      "POST",
+      "/x/v1",
+    );
+    const doc = parse(out)[0];
+    expect(doc.request.match).toEqual([{ jsonPath: "$.msg", equals: "a\nstatus: 500" }]);
+    expect(doc.response).toEqual({ status: 200, body: {} });
   });
 
   it("skips a field that would inject YAML, keeping only the valid condition", () => {

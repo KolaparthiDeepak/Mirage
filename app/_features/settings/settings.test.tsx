@@ -60,7 +60,7 @@ describe("SettingsTabs", () => {
       screen.getByRole("button", { name: "Generate project.yaml" }),
     );
     const pre = screen.getByText(/name: "Card Block \(Lost Card\)"/);
-    expect(pre.textContent).toContain("slug: card-block-lost");
+    expect(pre.textContent).toContain('slug: "card-block-lost"');
     expect(pre.textContent).not.toContain("defaults");
   });
 

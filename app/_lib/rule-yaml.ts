@@ -41,10 +41,10 @@ export function ruleYaml(
   path: string,
 ): string {
   const lines = [
-    `- id: ${caseId}`,
+    `- id: ${yamlScalar(caseId)}`,
     `  request:`,
-    `    method: ${method}`,
-    `    path: ${path}`,
+    `    method: ${yamlScalar(method)}`,
+    `    path: ${yamlScalar(path)}`,
   ];
 
   const valid = conditions.filter((c) => isValidField(c.field));
