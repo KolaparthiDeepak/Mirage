@@ -66,8 +66,7 @@ export function Sidebar({ className }: { className?: string }) {
           <div className={styles.navGroupLabel}>Project</div>
           {projectItems(slug).map(navLink)}
           <div className={styles.spacer} />
-          {/* TODO(phase-5): drop `soon` when /p/<slug>/settings lands */}
-          {navLink({ label: "Settings", href: `/p/${slug}/settings`, soon: true })}
+          {navLink({ label: "Settings", href: `/p/${slug}/settings` })}
         </div>
       ) : null}
     </nav>

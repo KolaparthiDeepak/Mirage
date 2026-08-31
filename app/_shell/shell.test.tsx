@@ -55,6 +55,8 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Environments" })).toBeDefined();
     // project Variables is live now (Phase 4.4)
     expect(screen.getByRole("link", { name: "Variables" })).toBeDefined();
+    // project Settings is live now (Phase 5.4)
+    expect(screen.getByRole("link", { name: "Settings" })).toBeDefined();
   });
 
   it("renders the project Endpoints item as the active link on its route", () => {
