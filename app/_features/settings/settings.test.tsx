@@ -54,11 +54,14 @@ describe("SettingsTabs", () => {
     expect(screen.getByDisplayValue("/commands")).toBeDefined();
   });
 
-  it("emits project.yaml on Save changes", () => {
+  it("emits project.yaml (edited keys only, no defaults block)", () => {
     renderTabs();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    const pre = screen.getByText(/name: Card Block \(Lost Card\)/);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate project.yaml" }),
+    );
+    const pre = screen.getByText(/name: "Card Block \(Lost Card\)"/);
     expect(pre.textContent).toContain("slug: card-block-lost");
+    expect(pre.textContent).not.toContain("defaults");
   });
 
   it("shows read-only server facts", () => {

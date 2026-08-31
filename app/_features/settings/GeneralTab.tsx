@@ -69,7 +69,7 @@ export function GeneralTab({
           )
         }
       >
-        Save changes
+        Generate project.yaml
       </Button>
 
       {yaml ? (
@@ -78,8 +78,10 @@ export function GeneralTab({
           <CopyButton text={() => yaml} label="Copy YAML" />
           <PreviewBadge />
           <p className={styles.note}>
-            Paste into <code>mocks/{slug}/project.yaml</code> and redeploy — the
-            browser can&apos;t write the repo.
+            These are the fields you edited. Merge them into{" "}
+            <code>mocks/{slug}/project.yaml</code> (keep your existing{" "}
+            <code>defaults:</code> block) and redeploy — the browser can&apos;t
+            write the repo.
           </p>
         </div>
       ) : null}

@@ -1,12 +1,18 @@
-/** Minimal valid `mocks/<slug>/project.yaml`. Pure — copy-paste only. */
+import { yamlScalar } from "./yaml-scalar";
+
+/** The subset of `mocks/<slug>/project.yaml` that GeneralTab can edit.
+ *  Emits ONLY those keys — no `defaults:` block — so pasting these lines over
+ *  the matching keys never clobbers `defaults.notFound` or other config the
+ *  form doesn't touch. Pure — copy-paste only. */
 export function projectYaml(input: {
   name: string;
   slug: string;
   basePath?: string;
 }): string {
-  const name = /[:#]/.test(input.name) ? `"${input.name}"` : input.name;
-  const lines = [`name: ${name}`, `slug: ${input.slug}`];
+  const lines = [
+    `name: ${yamlScalar(input.name)}`,
+    `slug: ${input.slug}`,
+  ];
   if (input.basePath) lines.push(`basePath: ${input.basePath}`);
-  lines.push("defaults:", "  delayMs: 0", "  cors: true");
   return lines.join("\n") + "\n";
 }
