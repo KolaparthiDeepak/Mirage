@@ -1,6 +1,6 @@
 ---
 title: 20 — Self-hosting
-size: M (3–5 days)
+size: S (1–2 days) — reduced from M: plan 02 now builds the SQLite driver
 depends on: 02, 19
 status: DRAFT
 ---
@@ -8,6 +8,11 @@ status: DRAFT
 # 20 — Self-hosting
 
 `docker run mirage`. The whole product, one container, SQLite, no cloud.
+
+**Decided (2026-09-09):** the SQLite driver moved into
+[plan 02](02-storage-layer.md) — local development needed it immediately, not just
+self-host. What is left here is purely packaging: a Dockerfile, the Vercel platform
+shims, and mounting a repo read-only for CI. No new driver code.
 
 ## Why
 
@@ -18,10 +23,11 @@ anyone who wants unbounded traffic retention. It is also the most credible answe
 
 ## Problem
 
-The build assumes Vercel: `vercel.json`, serverless function boundaries, Neon's
-HTTP driver, `waitUntil`. None of that is fundamental — but it is load-bearing in
-enough places that retrofitting later would be expensive. Plan 02's `Store`
-interface exists specifically so this is a driver, not a fork.
+The build assumes Vercel: `vercel.json`, serverless function boundaries,
+`waitUntil`, `maxDuration`. None of that is fundamental — but it is load-bearing in
+enough places that retrofitting later would be expensive. The `Store` interface
+from plan 02 already makes the database side a driver, not a fork; this plan
+closes the remaining gap, which is the platform, not the data layer.
 
 ## Design
 
@@ -32,20 +38,21 @@ docker run -p 3000:3000 -v ./data:/data ghcr.io/…/mirage
 ```
 
 - Next.js `output: "standalone"`.
-- **SQLite** at `/data/mirage.db`, WAL mode. One file, backed up by copying it.
-- Migrations run at startup, idempotent.
+- **The `better-sqlite3` driver from plan 02**, pointed at `/data/mirage.db`
+  instead of `.data/mirage.db`, WAL mode. One file, backed up by copying it.
+- Migrations run at startup, idempotent — the same migration runner plan 02
+  already built for local dev.
 - No auth by default (single-tenant is the common case), with `MIRAGE_AUTH=on`
   available for a shared instance.
 
-### What the SQLite driver must handle
+### The driver is already done
 
-- `jsonb` becomes `text` with JSON functions. Query shapes in plans 04 and 13 must
-  be validated against SQLite's JSON support, not assumed.
-- `bigserial` becomes `integer primary key autoincrement`.
-- Concurrent writes: WAL plus a single-writer queue. Mirage's write volume is
-  traffic inserts, which batch well.
-- **The conformance suite from plan 02 is the specification.** A driver that passes
-  it is correct by definition; that is why the suite exists before the driver does.
+Plan 02 built and conformance-tested the SQLite driver for local development, so
+there is nothing left to write here: `MIRAGE_DB_PATH=/data/mirage.db` at container
+start is the entire integration. Concurrent writes (WAL plus SQLite's own
+single-writer semantics) were already proven by that plan's conformance suite —
+Mirage's write volume is mostly traffic inserts, which batch well under a single
+writer regardless.
 
 ### Platform shims
 
@@ -90,20 +97,25 @@ integration, and it is the pitch.
 
 ## Tests
 
-- The SQLite driver passes the full plan 02 conformance suite.
-- The container starts, migrates, and serves `card-block-lost` from a mounted repo.
+- The container starts, migrates (using plan 02's runner), and serves
+  `card-block-lost` from a mounted repo.
 - Responses are byte-identical to the hosted deployment (shared golden files).
-- Traffic recording, retention pruning and counters all work on SQLite.
-- Restart preserves data; the database file is portable between machines.
+- Traffic recording, retention pruning and counters all work through the packaged
+  SQLite driver — re-running plan 02's conformance suite inside the container, not
+  a new suite.
+- Restart preserves data; the database file at `/data/mirage.db` is portable
+  between machines.
 - Read-only mount mode refuses config writes with a clear error.
+- Each row of plan 24's platform-shim table (`waitUntil`, cron, `maxDuration`) has
+  its self-host equivalent exercised by a test.
 
 ## Risks
 
 | risk | mitigation |
 |---|---|
-| Two backends diverge in behaviour | Conformance suite plus shared golden files, both in CI on every commit. |
-| SQLite JSON query gaps | Validate plan 04 and 13 query shapes on SQLite *before* committing to this plan. |
-| Maintenance doubles | Only the store and platform layers differ. Everything above them is shared code. |
+| Two backends diverge in behaviour | Already plan 02's problem to hold — one conformance suite, one set of shared golden files, both in CI on every commit. This plan only re-runs them inside the container. |
+| Platform shims diverge from Vercel's real behaviour | Each shim's test asserts the same externally-observable contract (a `waitUntil`'d write still happens; a cron route still fires), not the mechanism. |
+| Maintenance doubles | Only the platform layer differs now — the store layer is fully shared, built once in plan 02. |
 | Support burden of arbitrary environments | Document one supported configuration; others are best-effort. |
 
 ## Rollback

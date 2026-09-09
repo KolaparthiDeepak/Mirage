@@ -9,6 +9,7 @@ mocks.generated.json
 !.env.example
 .DS_Store
 .idea/
+.data/
 
 # SDD scratch — briefs, reports, review packages (progress.md already tracked)
 .superpowers/

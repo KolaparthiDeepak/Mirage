@@ -136,7 +136,7 @@ tier; files keep working; free at current scale.
 | # | Plan | Size | Depends on |
 |---|---|---|---|
 | 19 | [CLI & engine package](19-cli-and-engine-package.md) | M | 02 |
-| 20 | [Self-hosting](20-self-host.md) | M | 02, 19 |
+| 20 | [Self-hosting](20-self-host.md) | S | 02, 19 |
 | 24 | [Reliability & operations](24-reliability-and-ops.md) | M | 02, 04 |
 
 Sizes: **S** ≈ 1–2 days · **M** ≈ 3–5 days · **L** ≈ 1–2 weeks. Estimates by an
@@ -196,7 +196,7 @@ the plans below.
 
 | decision | effect on these plans |
 |---|---|
-| **Store: Supabase Postgres** | [02](02-storage-layer.md) names Supavisor as the connection model and treats the free-tier inactivity pause as a real availability risk. |
+| **Store: Supabase Postgres in prod, SQLite locally** | [02](02-storage-layer.md) builds both drivers behind one `Store` interface from the start, selected by `DATABASE_URL`. Supavisor is the connection model for Postgres; the free-tier inactivity pause is a real availability risk, mitigated by an unbounded stale-cache fallback. [20](20-self-host.md) shrinks from **M to S** — it packages the already-built SQLite driver rather than writing one. |
 | **Supabase Auth** | [14](14-auth-workspaces.md) drops hand-rolled OAuth and adds RLS; **L → M**. |
 | **Repo stays authoritative for `card-block-lost`** | [02](02-storage-layer.md): it stays `source: "repo"`, read-only in the UI. New projects are store-native. No migration. |
 | **The name is Mirage** | New [25](25-rename-to-mirage.md), in phase 0. |

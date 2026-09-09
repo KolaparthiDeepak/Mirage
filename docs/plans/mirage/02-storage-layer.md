@@ -165,13 +165,46 @@ depends on the service.
 
 Considered and rejected: Neon (equivalent for this plan, but no bundled auth) and
 Turso/libSQL (better self-host symmetry, weaker Vercel ergonomics, and traffic
-querying is genuinely relational). The `Store` interface keeps the door open; the
-SQLite driver arrives in [20](20-self-host.md) and must pass the same conformance
-suite.
+querying is genuinely relational). The `Store` interface keeps the door open.
+
+### The local driver ships here, not deferred to plan 20
+
+**Decided:** local development gets a real driver from day one — `better-sqlite3`
+against a file in `.data/mirage.db` (git-ignored) — rather than waiting for
+[20](20-self-host.md). Two reasons:
+
+1. Someone should be able to exercise create/write/traffic flows locally without
+   touching the hosted Supabase project at all, from the day this plan merges.
+2. Writing the SQLite driver once, proven by the same conformance suite as the
+   Postgres driver, means [20](20-self-host.md) has nothing left to build except a
+   Dockerfile — it stops being a driver-writing plan and becomes a packaging plan.
+
+`better-sqlite3` over the newer `node:sqlite`: the latter needs Node ≥ 22.5 and its
+flag requirements moved between minor versions, which is too fragile a floor for a
+project whose `engines` field is a promise to contributors. `better-sqlite3` is
+synchronous, mature, and needs no experimental flag on any currently supported
+Node.
+
+**Selection**, by environment variable, resolved once at module load:
+
+```ts
+// src/store/index.ts
+const driver = process.env.MIRAGE_DB_DRIVER ?? (process.env.DATABASE_URL ? "postgres" : "sqlite");
+export const store: Store = driver === "postgres" ? postgresStore() : sqliteStore();
+```
+
+`npm run dev` with no `DATABASE_URL` set gets SQLite for free — no setup step, no
+Docker, no Supabase account required to work on this project locally. Setting
+`DATABASE_URL` to a Supabase connection string switches the same code to Postgres,
+which is also exactly the CI-parity story: the conformance suite runs against both
+drivers, so a bug that only reproduces against Postgres is caught before merge, not
+after a deploy.
 
 ## Rollout
 
-1. Migration, `Store` interface, Postgres driver, conformance tests. No caller.
+1. Migration (as plain SQL, translated per-driver by a small compatibility layer —
+   see below), `Store` interface, **both drivers**, conformance suite run against
+   both. No caller yet.
 2. `sync-cli` plus a deploy hook. The store mirrors the repo; nothing reads it yet.
 3. **Equivalence check in CI:** for every project, config built from the store
    deep-equals config built from the bundle, with identical rule order. This is the
@@ -181,15 +214,33 @@ suite.
 5. Once stable, drop the static bundle import from the mock route (B17). Keep
    `MIRAGE_CONFIG_SOURCE=bundle` supported forever — it is also the offline story.
 
+### SQL compatibility
+
+SQLite has no `jsonb`, no `bigserial`, and only file-level (not row-level)
+locking. The schema above targets Postgres; the SQLite driver maps `jsonb` columns
+to `text` storing `JSON.stringify`d values with `json_extract()` for any filtered
+read, and `bigserial` to `integer primary key autoincrement`. This mapping is
+internal to each driver — the `Store` interface returns parsed objects either way,
+so nothing above this layer needs to know which database answered.
+
+**One rule this plan holds to:** never write a query the conformance suite cannot
+run against both drivers. A driver-specific capability (Postgres partial indexes
+for plan 04's unmatched-inbox index, for instance) becomes a driver-specific
+*optimisation* behind an identical *interface method* — the SQLite driver answers
+the same call slower, never differently.
+
 ## Tests
 
-- **Conformance suite**, run against every driver: round-trip a project, rule
-  ordering by `position`, cascade delete, `config_version` monotonicity.
+- **Conformance suite**, run against **both drivers**: round-trip a project, rule
+  ordering by `position`, cascade delete, `config_version` monotonicity. A driver
+  that fails this suite is not done.
 - **Equivalence:** `mocks/card-block-lost` from the store deep-equals from the
-  bundle.
+  bundle, checked against both drivers.
 - Cache: a hit inside the TTL issues no query; a save busts; expiry refetches.
 - Store unreachable: the route falls back to the last good config and logs; the
   mock route never 500s because of a config read.
+- Driver selection: no `DATABASE_URL` set → SQLite; `DATABASE_URL` set → Postgres;
+  `MIRAGE_DB_DRIVER` overrides either.
 
 ## Risks
 
@@ -207,6 +258,7 @@ Before step 4, nothing reads the store and revert is free. After step 4, flip
 
 ## Done when
 
-Equivalence green in CI · conformance green on the Supabase driver · the flag flip
-serves `card-block-lost` byte-identically to the bundle · p95 mock latency within
-10 ms of the bundle baseline.
+Equivalence green in CI · conformance green on **both** the Supabase and the
+SQLite driver · `npm run dev` with no `DATABASE_URL` works against local SQLite
+with zero setup · the flag flip serves `card-block-lost` byte-identically to the
+bundle · p95 mock latency within 10 ms of the bundle baseline.
