@@ -112,4 +112,17 @@ describe("allMatch", () => {
       req(),
     )).toBe(false);
   });
+
+  it("does not resolve off the prototype chain (B4)", () => {
+    const req: ParsedRequest = {
+      method: "POST", path: "/", headers: {}, query: {}, body: { a: 1 }, rawBody: "",
+    };
+    for (const token of ["$.__proto__", "$.constructor", "$.toString"]) {
+      expect(resolveJsonPath(req.body, token)).toBeUndefined();
+      expect(evalCondition({ jsonPath: token, exists: true }, req)).toBe(false);
+      expect(evalCondition({ jsonPath: token, exists: false }, req)).toBe(true);
+    }
+    // own properties still resolve
+    expect(resolveJsonPath(req.body, "$.a")).toBe(1);
+  });
 });

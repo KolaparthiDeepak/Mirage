@@ -64,4 +64,14 @@ describe("resolve", () => {
     expect(r.body).toBe("hello x");
     expect(r.headers["content-type"]).toBe("text/plain");
   });
+
+  it("404s a request that omits the project basePath (B2)", () => {
+    // basePath is "/commands"; the route path is "/verify/:machine".
+    expect(resolve(req(), project).matchedRuleId).toBe("verify-ok");
+
+    const bare = resolve(req({ path: "/verify/acropolis" }), project);
+    expect(bare.matchedRuleId).toBeNull();
+    expect(bare.status).toBe(404);
+    expect(bare.body).toEqual({ reason: "UNKNOWN_ROUTE" });
+  });
 });

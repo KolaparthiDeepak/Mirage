@@ -86,4 +86,94 @@ describe("compileMocks", () => {
     expect(ids.indexOf("block-ok")).toBeLessThan(ids.findIndex((i) => i.startsWith("openapi:")));
     expect(r.bundle.projects.card!.openApiDoc).toBeTruthy();
   });
+
+  // --- plan 01 correctness fixes ---
+
+  it('treats basePath "/" as no basePath and keeps OpenAPI routes (B1)', async () => {
+    const r = await compileMocks(fx("basepath-root"), "x");
+    expect(r.errors).toEqual([]);
+    expect(r.warnings).toEqual([]);
+    const svc = r.bundle.projects.svc!;
+    expect(svc.basePath).toBeUndefined();
+    expect(svc.routes.map((x) => x.id)).toEqual(["openapi:listUsers"]);
+    expect(svc.routes[0]!.path).toBe("/users");
+  });
+
+  it("errors when an OpenAPI file contributes no routes at all (B1)", async () => {
+    const r = await compileMocks(fx("basepath-oa"), "x");
+    // sanity: this fixture's spec does sit inside its basePath
+    expect(r.errors.filter((e) => e.includes("contributed no routes"))).toEqual([]);
+  });
+
+  it("merges every OpenAPI document in a project, not just the last (B3)", async () => {
+    const r = await compileMocks(fx("two-specs"), "x");
+    expect(r.errors).toEqual([]);
+    const svc = r.bundle.projects.svc!;
+    expect(svc.routes.map((x) => x.id)).toEqual(["openapi:listUsers", "openapi:listOrders"]);
+    const doc = svc.openApiDoc as { info: { title: string }; paths: Record<string, unknown> };
+    expect(Object.keys(doc.paths).sort()).toEqual(["/orders", "/users"]);
+    expect(doc.info.title).toBe("first"); // first document wins on info
+  });
+
+  it("errors when two OpenAPI documents declare the same path (B3)", async () => {
+    const r = await compileMocks(fx("spec-collision"), "x");
+    expect(r.errors.some((e) => e.includes('duplicate OpenAPI path "/users"'))).toBe(true);
+  });
+
+  it("warns when an earlier catch-all shadows a later specific rule (B10)", async () => {
+    const r = await compileMocks(fx("valid"), "x", {
+      "card/routes/zz-shadow.yaml": [
+        "- id: any-card",
+        "  request: { method: '*', path: /cards/** }",
+        "  response: { status: 200, body: {} }",
+        "- id: one-card",
+        "  request: { method: GET, path: /cards/:id }",
+        "  response: { status: 200, body: {} }",
+      ].join("\n"),
+    });
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.some((w) => w.includes('rule "one-card": unreachable') && w.includes("any-card"))).toBe(true);
+  });
+
+  it("does not warn when a later rule has match conditions the shadower lacks", async () => {
+    const r = await compileMocks(fx("valid"), "x", {
+      "card/routes/zz-cond.yaml": [
+        "- id: broad",
+        "  request: { method: GET, path: /widgets/:id }",
+        "  response: { status: 200, body: {} }",
+        "- id: narrow",
+        "  request:",
+        "    method: GET",
+        "    path: /widgets/:id",
+        "    match: [{ header: x-flag, equals: on }]",
+        "  response: { status: 200, body: {} }",
+      ].join("\n"),
+    });
+    // `narrow` is genuinely dead here (broad is unconditional and identical), so it
+    // must warn. `broad` itself is reachable and must not be reported.
+    expect(r.warnings.some((w) => w.startsWith('rule "narrow": unreachable'))).toBe(true);
+    expect(r.warnings.some((w) => w.startsWith('rule "broad"'))).toBe(false);
+  });
+
+  it("rejects a response header carrying a control character (B12)", async () => {
+    const r = await compileMocks(fx("valid"), "x", {
+      "card/routes/zz-hdr.yaml": [
+        "- id: bad-header",
+        "  request: { method: GET, path: /hdr }",
+        '  response: { status: 200, headers: { x-note: "a\\r\\nx-injected: 1" }, body: {} }',
+      ].join("\n"),
+    });
+    expect(r.errors.some((e) => e.includes("control character"))).toBe(true);
+  });
+
+  it("rejects an invalid response header name (B12)", async () => {
+    const r = await compileMocks(fx("valid"), "x", {
+      "card/routes/zz-name.yaml": [
+        "- id: bad-name",
+        "  request: { method: GET, path: /hdr2 }",
+        '  response: { status: 200, headers: { "bad header": "v" }, body: {} }',
+      ].join("\n"),
+    });
+    expect(r.errors.some((e) => e.includes("invalid response header name"))).toBe(true);
+  });
 });

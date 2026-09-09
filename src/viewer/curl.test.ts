@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { synthesizeRequest } from "./curl";
 
 const base = { method: "POST", runUrl: "/m/p/x/GET_CARD/v1" } as const;
@@ -96,5 +97,15 @@ describe("synthesizeRequest", () => {
     expect(d.curl).toContain(`curl -sS -X POST "$ORIGIN/m/p/x/GET_CARD/v1"`);
     expect(d.curl).toContain(`-H 'content-type: application/json'`);
     expect(d.curl).toContain(`"cardLast4": "0001"`);
+  });
+
+  it("shell-escapes single quotes in header values (B8)", () => {
+    const d = synthesizeRequest({
+      method: "GET", runUrl: "/m/x/y",
+      match: [{ header: "x-note", equals: "it's fine" }],
+    });
+    expect(d.curl).toContain("-H 'x-note: it'\\''s fine'");
+    // and the whole command is still valid shell
+    expect(() => execFileSync("bash", ["-n"], { input: d.curl })).not.toThrow();
   });
 });

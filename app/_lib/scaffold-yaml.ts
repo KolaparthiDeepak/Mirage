@@ -26,7 +26,8 @@ export function newProjectYaml(input: { name: string; slug: string }): string {
     [
       `name: ${yamlScalar(input.name)}`,
       `slug: ${input.slug}`,
-      `basePath: /`,
+      // No `basePath:` — "/" is not a base path, and emitting it used to drop
+      // every OpenAPI-generated route in the project.
       `defaults:`,
       `  delayMs: 0`,
       `  cors: true`,

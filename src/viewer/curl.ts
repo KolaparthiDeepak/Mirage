@@ -75,6 +75,11 @@ function describeOp(c: MatchCondition): string {
   return "has an unrepresentable constraint";
 }
 
+/** Wrap as a POSIX single-quoted shell word, escaping any embedded quote. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 function buildCurl(
   method: string,
   url: string,
@@ -82,8 +87,8 @@ function buildCurl(
   body: string | undefined,
 ): string {
   const parts = [`curl -sS -X ${method} "$ORIGIN${url}"`];
-  for (const [k, v] of Object.entries(headers)) parts.push(`  -H '${k}: ${v}'`);
-  if (body !== undefined) parts.push(`  -d '${body.replace(/'/g, "'\\''")}'`);
+  for (const [k, v] of Object.entries(headers)) parts.push(`  -H ${shellQuote(`${k}: ${v}`)}`);
+  if (body !== undefined) parts.push(`  -d ${shellQuote(body)}`);
   return parts.join(" \\\n");
 }
 

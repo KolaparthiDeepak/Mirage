@@ -47,10 +47,10 @@ describe("renderTemplate", () => {
     expect(renderTemplate("[{{request.body.missing}}]", ctx, w)).toBe("[]");
     expect(w).toHaveLength(1);
   });
-  it("function-valued resolution renders empty and warns", () => {
+  it("does not traverse the prototype chain: {{request.body.constructor}} is not found", () => {
     const w: string[] = [];
     expect(renderTemplate("[{{request.body.constructor}}]", ctx, w)).toBe("[]");
-    expect(w).toEqual(["template value not usable: {{request.body.constructor}}"]);
+    expect(w).toEqual(["template value not found: {{request.body.constructor}}"]);
   });
   it("randomInt swaps reversed bounds", () => {
     const w: string[] = [];

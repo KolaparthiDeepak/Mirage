@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FORBIDDEN_PATH_TOKENS, jsonPathTokens } from "../engine/match";
 
 const slugRe = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
@@ -14,14 +15,17 @@ export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
     slug: z.string().regex(slugRe, "slug must match ^[a-z0-9][a-z0-9-]{0,62}$"),
+    // "/" means "no base path": keeping it would make every generated OpenAPI
+    // route fall outside the basePath test in compile.ts and be dropped.
     basePath: z
       .string()
       .startsWith("/")
       .transform((s) => (s.endsWith("/") && s.length > 1 ? s.slice(0, -1) : s))
+      .transform((s) => (s === "/" ? undefined : s))
       .optional(),
     defaults: z
       .object({
-        delayMs: z.number().int().min(0).max(9000).optional(),
+        delayMs: z.number().int().min(0).max(5000).optional(),
         cors: z.boolean().optional(),
         notFound: mockResponseSchema.optional(),
       })
@@ -29,6 +33,14 @@ export const projectYamlSchema = z
       .optional(),
   })
   .strict();
+
+/** A group closed by `+`/`*`/`{n,}` that itself contains an unbounded quantifier —
+ *  `(a+)+`, `(a*)*`, `(\\d+|x)*`. Catches the accidental case, not every ReDoS. */
+const NESTED_QUANTIFIER_RE = /\([^()]*[+*][^()]*\)\s*(?:[+*]|\{\d+,\})/;
+
+export function hasNestedQuantifier(source: string): boolean {
+  return NESTED_QUANTIFIER_RE.test(source);
+}
 
 const TARGET_KEYS = ["jsonPath", "header", "query"] as const;
 const OP_KEYS = ["equals", "notEquals", "contains", "regex", "exists"] as const;
@@ -47,10 +59,22 @@ const matchConditionSchema = z.record(z.unknown()).superRefine((obj, ctx) => {
     } else {
       try { new RegExp(obj.regex); }
       catch { ctx.addIssue({ code: "custom", message: `invalid regex: ${obj.regex}` }); }
+      if (hasNestedQuantifier(obj.regex)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `regex has a nested unbounded quantifier and can backtrack catastrophically: ${obj.regex}`,
+        });
+      }
     }
   }
   if ("exists" in obj && typeof obj.exists !== "boolean") {
     ctx.addIssue({ code: "custom", message: "exists must be a boolean" });
+  }
+  if (typeof obj.jsonPath === "string") {
+    const bad = jsonPathTokens(obj.jsonPath).find((t: string) => FORBIDDEN_PATH_TOKENS.has(t));
+    if (bad) {
+      ctx.addIssue({ code: "custom", message: `jsonPath may not traverse "${bad}"` });
+    }
   }
 });
 

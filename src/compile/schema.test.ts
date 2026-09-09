@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectYamlSchema, ruleFileSchema } from "./schema";
+import { projectYamlSchema, ruleFileSchema, ruleSchema } from "./schema";
 
 describe("projectYamlSchema", () => {
   it("accepts a minimal valid project", () => {
@@ -11,9 +11,9 @@ describe("projectYamlSchema", () => {
   it("rejects an unknown top-level key", () => {
     expect(() => projectYamlSchema.parse({ name: "X", slug: "x", nope: 1 })).toThrow();
   });
-  it("normalizes a trailing-slash basePath", () => {
+  it("normalizes a trailing-slash basePath, and treats \"/\" as no basePath", () => {
     expect(projectYamlSchema.parse({ name: "X", slug: "x", basePath: "/api/" }).basePath).toBe("/api");
-    expect(projectYamlSchema.parse({ name: "X", slug: "x", basePath: "/" }).basePath).toBe("/");
+    expect(projectYamlSchema.parse({ name: "X", slug: "x", basePath: "/" }).basePath).toBeUndefined();
   });
 });
 
@@ -52,5 +52,34 @@ describe("ruleFileSchema", () => {
       id: "a", request: { method: "GET", path: "/x", match: [{ jsonPath: "$.a", regex: 5 }] },
       response: { status: 200 },
     }])).toThrow(/regex must be a string/);
+  });
+
+  it("rejects a jsonPath that traverses the prototype chain (B4)", () => {
+    for (const jsonPath of ["$.__proto__.x", "$.a.constructor", "$.prototype"]) {
+      const r = ruleSchema.safeParse({
+        id: "r", request: { method: "GET", path: "/x", match: [{ jsonPath, exists: true }] },
+        response: { status: 200 },
+      });
+      expect(r.success).toBe(false);
+    }
+  });
+
+  it("rejects a regex with a nested unbounded quantifier (B7)", () => {
+    const bad = ruleSchema.safeParse({
+      id: "r", request: { method: "GET", path: "/x", match: [{ query: "q", regex: "(a+)+$" }] },
+      response: { status: 200 },
+    });
+    expect(bad.success).toBe(false);
+
+    const ok = ruleSchema.safeParse({
+      id: "r", request: { method: "GET", path: "/x", match: [{ query: "q", regex: "^[a-z]+$" }] },
+      response: { status: 200 },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it("caps delayMs below the function budget (B11)", () => {
+    expect(projectYamlSchema.safeParse({ name: "X", slug: "x", defaults: { delayMs: 5000 } }).success).toBe(true);
+    expect(projectYamlSchema.safeParse({ name: "X", slug: "x", defaults: { delayMs: 9000 } }).success).toBe(false);
   });
 });

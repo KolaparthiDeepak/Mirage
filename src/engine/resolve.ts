@@ -2,11 +2,14 @@ import { allMatch, matchPath, methodMatches } from "./match";
 import { renderDeep, renderTemplate, type TemplateContext } from "./template";
 import type { MockResponse, ParsedRequest, ProjectConfig, ResolveResult } from "./types";
 
-function stripBasePath(path: string, basePath: string | undefined): string {
+/** Returns the basePath-relative path, or null when the request is outside the
+ *  basePath entirely. Returning the path unchanged (as this did) let a request
+ *  that omitted the basePath match a basePath-relative route and get a 200. */
+function stripBasePath(path: string, basePath: string | undefined): string | null {
   if (!basePath) return path;
   if (path === basePath) return "/";
   if (path.startsWith(basePath + "/")) return path.slice(basePath.length);
-  return path;
+  return null;
 }
 
 function buildResponse(
@@ -24,9 +27,16 @@ function buildResponse(
   return { status: response.status, headers, body };
 }
 
+function notFound(req: ParsedRequest, project: ProjectConfig, warnings: string[]): ResolveResult {
+  const ctx: TemplateContext = { body: req.body, path: {}, query: req.query, header: req.headers };
+  const built = buildResponse(project.defaults.notFound, ctx, warnings);
+  return { ...built, matchedRuleId: null, delayMs: project.defaults.delayMs, warnings };
+}
+
 export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResult {
-  const path = stripBasePath(req.path, project.basePath);
   const warnings: string[] = [];
+  const path = stripBasePath(req.path, project.basePath);
+  if (path === null) return notFound(req, project, warnings);
 
   for (const route of project.routes) {
     if (!methodMatches(route.method, req.method)) continue;
@@ -39,7 +49,5 @@ export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResu
     return { ...built, matchedRuleId: route.id, delayMs: project.defaults.delayMs, warnings };
   }
 
-  const ctx: TemplateContext = { body: req.body, path: {}, query: req.query, header: req.headers };
-  const built = buildResponse(project.defaults.notFound, ctx, warnings);
-  return { ...built, matchedRuleId: null, delayMs: project.defaults.delayMs, warnings };
+  return notFound(req, project, warnings);
 }

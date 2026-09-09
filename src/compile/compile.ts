@@ -4,7 +4,7 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { compileSegments } from "../engine/match";
 import { parseTemplate, TemplateError } from "../engine/template";
-import type { MockResponse, ProjectConfig, Route } from "../engine/types";
+import type { MockResponse, ProjectConfig, Route, Segment } from "../engine/types";
 import { expandOpenApi } from "../openapi/expand";
 import { projectYamlSchema, ruleFileSchema, type Rule } from "./schema";
 
@@ -21,6 +21,40 @@ export interface CompileResult {
 }
 
 const DEFAULT_NOT_FOUND: MockResponse = { status: 404, body: { reason: "UNKNOWN_ROUTE" } };
+
+type OaDoc = Record<string, unknown> & {
+  paths?: Record<string, unknown>;
+  components?: Record<string, Record<string, unknown>>;
+};
+
+/** Union `paths` and `components.*` across a project's OpenAPI files; the first
+ *  document wins on `info` and the spec version. A colliding key is an error —
+ *  this used to silently keep only the last file's document. */
+function mergeOpenApiDocs(
+  base: unknown,
+  next: unknown,
+  label: string,
+  errors: string[],
+): unknown {
+  if (base == null) return next;
+  const a = base as OaDoc;
+  const b = next as OaDoc;
+  const paths = { ...(a.paths ?? {}) };
+  for (const [k, v] of Object.entries(b.paths ?? {})) {
+    if (k in paths) errors.push(`${label}: duplicate OpenAPI path "${k}" across the project's specs`);
+    paths[k] = v;
+  }
+  const components: Record<string, Record<string, unknown>> = { ...(a.components ?? {}) };
+  for (const [group, entries] of Object.entries(b.components ?? {})) {
+    const merged = { ...(components[group] ?? {}) };
+    for (const [k, v] of Object.entries(entries)) {
+      if (k in merged) errors.push(`${label}: duplicate OpenAPI components.${group}."${k}" across the project's specs`);
+      merged[k] = v;
+    }
+    components[group] = merged;
+  }
+  return { ...b, ...a, paths, ...(Object.keys(components).length > 0 ? { components } : {}) };
+}
 
 function fmtErr(e: unknown): string {
   if (e instanceof z.ZodError) {
@@ -46,14 +80,27 @@ function walkRuleFiles(dir: string): string[] {
   }
 }
 
-function assertTemplatesValid(resp: MockResponse): void {
+// RFC 7230 field-name token. A name outside it, or a value carrying a control
+// character, makes the Response constructor throw at request time — a mock that
+// compiled clean but 500s in production.
+const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+function assertResponseValid(resp: MockResponse): void {
   const visit = (v: unknown): void => {
     if (typeof v === "string") parseTemplate(v);
     else if (Array.isArray(v)) v.forEach(visit);
     else if (v && typeof v === "object") Object.values(v).forEach(visit);
   };
   visit(resp.body);
-  for (const h of Object.values(resp.headers ?? {})) parseTemplate(h);
+  for (const [name, value] of Object.entries(resp.headers ?? {})) {
+    if (!HEADER_NAME_RE.test(name)) {
+      throw new TemplateError(`invalid response header name "${name}"`);
+    }
+    if (/[\u0000-\u001f\u007f]/.test(value)) {
+      throw new TemplateError(`response header "${name}" contains a control character`);
+    }
+    parseTemplate(value);
+  }
 }
 
 function toRoute(rule: Rule): Route {
@@ -67,18 +114,50 @@ function toRoute(rule: Rule): Route {
   };
 }
 
-function detectDeadRules(routes: Route[], warnings: string[]): void {
-  const seenUnconditional = new Set<string>();
-  for (const r of routes) {
-    const key = `${r.method} ${r.path}`;
-    if (!r.match || r.match.length === 0) {
-      if (seenUnconditional.has(key) && !r.id.startsWith("openapi:")) {
-        // A hand-written rule intentionally overriding a generated openapi: route
-        // for the same method+path is the intended pattern (design spec §4.4).
-        warnings.push(`rule "${r.id}": unreachable — an earlier rule already matches all "${key}"`);
-      }
-      seenUnconditional.add(key);
+/** True when `earlier` matches every request `later` can match, so `later` is dead
+ *  under first-match-wins. A literal subsumes only an identical literal; param and
+ *  wildcard subsume any single segment; catchall subsumes the rest of the path. */
+function segmentsSubsume(earlier: Segment[], later: Segment[]): boolean {
+  for (let i = 0; i < earlier.length; i++) {
+    const e = earlier[i]!;
+    if (e.kind === "catchall") return true;
+    const l = later[i];
+    if (l === undefined) return false;
+    if (e.kind === "literal") {
+      if (l.kind !== "literal" || l.value !== e.value) return false;
+    } else if (l.kind === "catchall") {
+      // A single-segment earlier pattern cannot cover an unbounded tail.
+      return false;
     }
+    // param / wildcard cover any single later segment
+  }
+  return later.length === earlier.length;
+}
+
+function methodSubsumes(earlier: string, later: string): boolean {
+  return earlier === "*" || earlier === later;
+}
+
+function detectDeadRules(routes: Route[], warnings: string[]): void {
+  // Only rules with no match conditions can shadow: a conditional rule may decline.
+  const unconditional: Route[] = [];
+  for (const r of routes) {
+    const shadower = unconditional.find(
+      (e) => methodSubsumes(e.method, r.method) && segmentsSubsume(e.segments, r.segments),
+    );
+    // A hand-written rule intentionally overriding a generated openapi: route is
+    // the documented pattern (design spec §4.4) — suppress that case only.
+    const intendedOverride =
+      r.id.startsWith("openapi:") && !shadower?.id.startsWith("openapi:");
+    if (shadower && !intendedOverride) {
+      const same = shadower.method === r.method && shadower.path === r.path;
+      warnings.push(
+        same
+          ? `rule "${r.id}": unreachable — rule "${shadower.id}" already matches all "${r.method} ${r.path}"`
+          : `rule "${r.id}": unreachable — earlier rule "${shadower.id}" (${shadower.method} ${shadower.path}) already matches every request it could match`,
+      );
+    }
+    if (!r.match || r.match.length === 0) unconditional.push(r);
   }
 }
 
@@ -151,7 +230,7 @@ export async function compileMocks(
           continue;
         }
         try {
-          assertTemplatesValid(rule.response);
+          assertResponseValid(rule.response);
         } catch (e) {
           if (e instanceof TemplateError) { errors.push(`${label}: rule "${rule.id}": ${e.message}`); continue; }
           throw e;
@@ -173,6 +252,7 @@ export async function compileMocks(
       try {
         const res = await expandOpenApi(full);
         const bp = project.basePath;
+        let kept = 0;
         for (const r of res.routes) {
           let route = r;
           if (bp) {
@@ -187,9 +267,18 @@ export async function compileMocks(
           }
           if (route.path.startsWith("/__")) { errors.push(`${full}: generated route "${route.id}" hits reserved path "/__"`); continue; }
           routes.push(route); // AFTER hand-written -> first-match-wins => hand-written overrides
+          kept++;
+        }
+        // Every path falling outside basePath used to be warnings-only, so an
+        // OpenAPI import could contribute nothing and still ship.
+        if (res.routes.length > 0 && kept === 0) {
+          errors.push(
+            `${full}: contributed no routes — every path is outside basePath "${bp}". ` +
+              `OpenAPI paths must include the base path; do not put it in servers[].url only.`,
+          );
         }
         for (const w of res.warnings) warnings.push(`${dirName}/openapi/${f}: ${w}`);
-        mergedDoc = res.mergedDoc;
+        mergedDoc = mergeOpenApiDocs(mergedDoc, res.mergedDoc, full, errors);
       } catch (e) {
         errors.push(`${full}: ${(e as Error).message}`);
       }

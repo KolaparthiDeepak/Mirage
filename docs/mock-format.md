@@ -26,7 +26,7 @@ name: Card Block (Lost Card)          # display name
 slug: card-block-lost                 # MUST equal the directory name; URL segment
 basePath: /commands                   # optional; stripped from the request path before matching
 defaults:
-  delayMs: 0                          # artificial latency added to every response
+  delayMs: 0                          # artificial latency added to every response (0-5000)
   cors: true                          # emit permissive CORS headers + handle OPTIONS preflight
   notFound:                           # returned when no route matches
     status: 404
@@ -35,7 +35,14 @@ defaults:
 
 - `slug`: `^[a-z0-9][a-z0-9-]{0,62}$`, and MUST equal the directory name (mismatch → build error).
 - `basePath`: if set, a request to `/m/<slug>/commands/x/y` matches a route with `path: /x/y`.
-  A trailing slash is normalized away (`/api/` → `/api`).
+  A trailing slash is normalized away (`/api/` → `/api`), and a bare `/` means **no**
+  base path. A request that does **not** start with `basePath` matches nothing and gets
+  the `notFound` default — the base path is part of the contract, not a decoration.
+- **OpenAPI paths must include `basePath`; hand-written paths must not.** A generated
+  route's path is matched against the document's `paths` key, and the prefix is stripped
+  at compile time. An OpenAPI document that carries the base path in `servers[].url`
+  instead (the more usual style) produces routes outside `basePath` — a build error
+  naming each one.
 - `cors: false`: no CORS headers, and `OPTIONS` requests fall through to normal matching
   (so they typically hit the `notFound` default, i.e. `404`).
 
@@ -76,6 +83,16 @@ A YAML list of **rules**. Multiple files are concatenated in filename order. Eva
 `request.path.name`), `*` (single-segment wildcard), `**` (trailing catch-all). No regex in
 paths.
 
+Path matching details:
+
+- **Case-sensitive.** `/Users` does not match `/users`.
+- **Trailing slashes are ignored.** `/users/` and `/users` are the same path. There is no
+  strict mode.
+- **`**` matches zero or more segments** and captures nothing — there is no template token
+  for the matched remainder.
+- **Repeated query parameters collapse to the last value.** `?tag=a&tag=b` is indistinguishable
+  from `?tag=b`, and a `query` condition sees only `b`.
+
 ### Match conditions
 
 Each item in a `match` array is one of:
@@ -89,9 +106,15 @@ Each item in a `match` array is one of:
 The engine applies all five operators uniformly to every target.
 
 `equals` compares as strings after JSON-stringifying non-string targets. `regex` is
-JavaScript `RegExp`, anchored by the author if needed, compiled at build time (invalid regex
-→ build error). All conditions in a `match` array must pass (AND). **To express OR, write two
-rules.**
+JavaScript `RegExp`, anchored by the author if needed, validated at build time (invalid regex
+→ build error) and compiled once, then reused for every request. A pattern with a nested
+unbounded quantifier (`(a+)+`) is rejected at build time, because it can backtrack
+catastrophically on a public endpoint. All conditions in a `match` array must pass (AND).
+**To express OR, write two rules.**
+
+`jsonPath` reads **own properties only**. `$.__proto__`, `$.constructor` and `$.prototype`
+are rejected at build time; they used to resolve off the prototype chain and match on data
+the request never sent.
 
 `notEquals`, `contains`, and `regex` evaluate to **false** when the target is absent
 (fail-closed). To assert that a field is missing, use `exists: false`.
@@ -151,9 +174,18 @@ a generated fallback for the same path is the normal pattern.
 
 ## Collisions & warnings (build-time, non-fatal)
 
-- Two rules, same method + path, neither with a `match` block → WARNING (second is dead).
+- An earlier rule with no `match` block that matches **every** request a later rule could
+  match → WARNING (the later rule is dead). This covers an identical method + path, and also
+  a broader earlier pattern: `/users/**` before `/users/:id`, or `*` before `GET /x`.
+  A hand-written rule overriding a generated `openapi:` route is the intended pattern and is
+  not warned about.
 - OpenAPI operation with no example → WARNING.
 - A project directory with no `project.yaml` → ERROR.
+- Two OpenAPI documents in one project declaring the same `paths` key, or the same
+  `components.<group>` key → ERROR. Documents are otherwise merged: the union of their
+  paths and components, with the first document winning on `info` and the spec version.
+- A response header with a name outside the HTTP token grammar, or a value containing a
+  control character → ERROR. Such a header makes the response throw at request time.
 - `slug` != directory name → ERROR.
 - The same rule `id` used twice within a project → ERROR.
 

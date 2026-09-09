@@ -33,7 +33,6 @@ describe("newProjectYaml", () => {
     expect(newProjectYaml({ name: "Card Service", slug: "card-service" })).toBe(
       `name: "Card Service"
 slug: card-service
-basePath: /
 defaults:
   delayMs: 0
   cors: true
