@@ -21,7 +21,9 @@ export interface PreviewState {
 // "Add environment" modal.
 export const SEED_ENVIRONMENTS: Env[] = [{ id: "local", name: "Local", baseUrl: "" }];
 
-const KEY = "mockservers-preview";
+// Per-tab and disposable (plan 17 replaces this store), so unlike theme.ts this
+// needs no legacy-key fallback for the mockservers -> Mirage rename (plan 25).
+const KEY = "mirage-preview";
 
 function initial(): PreviewState {
   return { environments: SEED_ENVIRONMENTS, activeEnvId: "local", variables: [], scenarios: {}, rulesDraft: {} };

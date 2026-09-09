@@ -40,10 +40,10 @@ describe("theme", () => {
 
   it("persists the chosen theme to localStorage — both values", () => {
     setTheme("obsidian");
-    expect(localStorage.getItem("mockservers-theme")).toBe("obsidian");
+    expect(localStorage.getItem("mirage-theme")).toBe("obsidian");
     expect(document.documentElement.dataset.theme).toBeUndefined();
     setTheme("paper");
-    expect(localStorage.getItem("mockservers-theme")).toBe("paper");
+    expect(localStorage.getItem("mirage-theme")).toBe("paper");
   });
 
   it("toggleTheme flips paper back to obsidian", () => {
@@ -51,6 +51,17 @@ describe("theme", () => {
     toggleTheme();
     expect(getTheme()).toBe("obsidian");
     expect(document.documentElement.dataset.theme).toBeUndefined();
+  });
+
+  it("falls back to the pre-rename key so an existing choice survives (plan 25)", () => {
+    localStorage.setItem("mockservers-theme", "paper");
+    expect(getTheme()).toBe("paper");
+  });
+
+  it("prefers the new key over the legacy one once both are set", () => {
+    localStorage.setItem("mockservers-theme", "paper");
+    localStorage.setItem("mirage-theme", "obsidian");
+    expect(getTheme()).toBe("obsidian");
   });
 });
 

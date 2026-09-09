@@ -29,17 +29,17 @@ describe("preview-store", () => {
     render(<PreviewProvider><Probe /></PreviewProvider>);
     act(() => { screen.getByText("add").click(); });
     expect(screen.getByTestId("vars").textContent).toBe("1");
-    const raw = sessionStorage.getItem("mockservers-preview");
+    const raw = sessionStorage.getItem("mirage-preview");
     expect(raw && JSON.parse(raw).variables.length).toBe(1);
   });
   it("clamps a corrupt empty environments array back to the seed", () => {
-    sessionStorage.setItem("mockservers-preview", JSON.stringify({ environments: [] }));
+    sessionStorage.setItem("mirage-preview", JSON.stringify({ environments: [] }));
     render(<PreviewProvider><Probe /></PreviewProvider>);
     expect(screen.getByTestId("count").textContent).toBe(String(SEED_ENVIRONMENTS.length));
     expect(screen.getByTestId("active").textContent).toBeTruthy();
   });
   it("rehydrates from existing storage", () => {
-    sessionStorage.setItem("mockservers-preview", JSON.stringify({
+    sessionStorage.setItem("mirage-preview", JSON.stringify({
       environments: SEED_ENVIRONMENTS, activeEnvId: SEED_ENVIRONMENTS[0]!.id,
       variables: [{ id: "x", key: "A", value: "B", scope: "Global" }], scenarios: {}, rulesDraft: {},
     }));

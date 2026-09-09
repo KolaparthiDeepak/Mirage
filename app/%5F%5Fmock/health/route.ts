@@ -10,6 +10,7 @@ const bundle = bundleJson as unknown as CompiledBundle;
 export function GET(): Response {
   return Response.json({
     ok: true,
+    service: "mirage",
     builtAt: bundle.builtAt,
     commit: bundle.commit,
     projectCount: Object.keys(bundle.projects).length,

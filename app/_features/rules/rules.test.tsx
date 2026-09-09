@@ -95,7 +95,7 @@ describe("RuleBuilder", () => {
       target: { value: "alpha" },
     });
 
-    const stored = JSON.parse(sessionStorage.getItem("mockservers-preview")!);
+    const stored = JSON.parse(sessionStorage.getItem("mirage-preview")!);
     expect(stored.rulesDraft[endpoint.key][0].field).toBe("body.cardLast4");
 
     fireEvent.click(screen.getByRole("button", { name: "Export YAML" }));

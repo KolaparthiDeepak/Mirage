@@ -52,7 +52,7 @@ function renderPage() {
 }
 
 function stored() {
-  return JSON.parse(sessionStorage.getItem("mockservers-preview")!);
+  return JSON.parse(sessionStorage.getItem("mirage-preview")!);
 }
 
 describe("ScenariosPage", () => {

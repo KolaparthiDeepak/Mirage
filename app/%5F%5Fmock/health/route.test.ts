@@ -12,10 +12,10 @@ vi.mock("@/mocks.generated.json", () => ({
 }));
 
 describe("__mock endpoints", () => {
-  it("health reports build info", async () => {
+  it("health reports build info and the service name (plan 25)", async () => {
     const { GET } = await import("./route");
     expect(await (await GET()).json()).toEqual({
-      ok: true, builtAt: "2026-08-28T00:00:00.000Z", commit: "abc123", projectCount: 2, warnings: ["w1"],
+      ok: true, service: "mirage", builtAt: "2026-08-28T00:00:00.000Z", commit: "abc123", projectCount: 2, warnings: ["w1"],
     });
   });
   it("projects lists slug/name/routeCount/hasOpenApi", async () => {
