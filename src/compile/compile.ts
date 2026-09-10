@@ -231,7 +231,7 @@ export async function compileMocks(
     for (const f of oaFiles) {
       const full = join(openapiDir, f);
       try {
-        const res = await expandOpenApi(full);
+        const res = await expandOpenApi(full, { fakeFromSchema: project.fakeFromSchema });
         const bp = project.basePath;
         let kept = 0;
         for (const r of res.routes) {

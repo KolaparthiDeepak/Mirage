@@ -31,6 +31,10 @@ export const projectYamlSchema = z
     name: z.string().min(1),
     slug: z.string().regex(slugRe, "slug must match ^[a-z0-9][a-z0-9-]{0,62}$"),
     upstream: upstreamSchema.optional(),
+    // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
+    // body. Default true; an existing project with examples throughout is
+    // unaffected either way.
+    fakeFromSchema: z.boolean().optional().default(true),
     // "/" means "no base path": keeping it would make every generated OpenAPI
     // route fall outside the basePath test in compile.ts and be dropped.
     basePath: z
