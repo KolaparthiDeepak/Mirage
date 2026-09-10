@@ -40,8 +40,8 @@ describe("parseHar", () => {
     const { drafts } = ok(
       parseHar(har([entry("GET", "https://x/session", 200, "application/json", JSON.stringify({ token }))])),
     );
-    expect(JSON.stringify(drafts[0]!.rule.response.body)).not.toContain(token);
-    expect(JSON.stringify(drafts[0]!.rule.response.body)).toContain("***");
+    expect(JSON.stringify(drafts[0]!.rule.response!.body)).not.toContain(token);
+    expect(JSON.stringify(drafts[0]!.rule.response!.body)).toContain("***");
   });
 
   it("drops non-JSON/text entries by default and reports the count", () => {

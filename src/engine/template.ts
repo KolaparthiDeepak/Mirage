@@ -1,14 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { resolveJsonPath } from "./match";
+import type { TemplateContext } from "./types";
 
 export class TemplateError extends Error {}
 
-export interface TemplateContext {
-  body: unknown;
-  path: Record<string, string>;
-  query: Record<string, string>;
-  header: Record<string, string>;
-}
+export type { TemplateContext };
 
 const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
 const IDENT = "[A-Za-z0-9_\\-]+";

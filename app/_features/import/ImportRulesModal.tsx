@@ -145,7 +145,7 @@ export function ImportRulesModal({ open, onClose, slug }: { open: boolean; onClo
                     <code>
                       {d.rule.request.method} {d.rule.request.path}
                     </code>{" "}
-                    → {d.rule.response.status}
+                    → {d.rule.response?.status ?? d.rule.responses?.variants[0]?.status}
                   </label>
                 </li>
               ))}

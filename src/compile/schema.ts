@@ -11,6 +11,41 @@ const mockResponseSchema = z
   })
   .strict();
 
+// Plan 10 — stateful variants. `response` (singular) stays the documented
+// default; `responses` is additive, so every existing mock is untouched.
+const whenSchema = z
+  .object({
+    callCount: z
+      .object({ gte: z.number().int().min(0).optional(), lt: z.number().int().min(0).optional(), eq: z.number().int().min(0).optional() })
+      .strict()
+      .refine((o) => o.gte != null || o.lt != null || o.eq != null, "callCount needs gte, lt or eq"),
+  })
+  .strict();
+
+const variantSchema = mockResponseSchema.extend({
+  weight: z.number().positive().optional(),
+  when: whenSchema.optional(),
+});
+
+export const responseVariantsSchema = z
+  .object({
+    strategy: z.enum(["sequence", "weighted", "conditional"]),
+    variants: z.array(variantSchema).min(1),
+    /** sequence only: after the last variant, repeat it (true, default) or cycle. */
+    repeatLast: z.boolean().default(true),
+    /** Header carrying the session key; default "x-mirage-session". */
+    sessionHeader: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine((r, ctx) => {
+    if (r.strategy === "weighted" && r.variants.some((v) => v.weight == null)) {
+      ctx.addIssue({ code: "custom", message: "every variant needs a `weight` for the weighted strategy" });
+    }
+    if (r.strategy === "conditional" && r.variants.some((v) => v.when == null)) {
+      ctx.addIssue({ code: "custom", message: "every variant needs a `when` for the conditional strategy" });
+    }
+  });
+
 // Plan 07. `mode: off` (or omitting `upstream` entirely) is today's behaviour.
 // The URL is only shape-checked here — the DNS-resolution / private-range check
 // (src/proxy/ssrf.ts) is async and runs at save time and before every forward.
@@ -119,9 +154,15 @@ export const ruleSchema = z
         match: z.array(matchConditionSchema).optional(),
       })
       .strict(),
-    response: mockResponseSchema,
+    response: mockResponseSchema.optional(),
+    responses: responseVariantsSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((r, ctx) => {
+    if (!r.response === !r.responses) {
+      ctx.addIssue({ code: "custom", message: "a rule needs exactly one of `response` or `responses`" });
+    }
+  });
 
 export const ruleFileSchema = z.array(ruleSchema);
 

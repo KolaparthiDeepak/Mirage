@@ -4,6 +4,7 @@ import { parseRequest } from "@/src/engine/request";
 import { resolve } from "@/src/engine/resolve";
 import type { UpstreamConfig } from "@/src/engine/types";
 import { proxyUnmatchedRequest } from "@/src/proxy";
+import { applyState } from "@/src/state/apply";
 import { clientHash, clientIp } from "@/src/store/client-hash";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
@@ -63,6 +64,19 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       : json(404, { error: "no openapi spec", slug });
   }
 
+  // Plan 10: POST /m/<slug>/__reset[?session=] — zero the stateful counters so
+  // a CI job can reset between runs without a token or the UI.
+  if (parts.length === 2 && parts[1] === "__reset" && req.method === "POST" && process.env.MIRAGE_STATEFUL !== "off") {
+    const session = new URL(req.url).searchParams.get("session") ?? undefined;
+    try {
+      const store = await getRuntimeStore();
+      const removed = await store.resetCounters(slug, undefined, session);
+      return json(200, { reset: removed, slug, session: session ?? "all" });
+    } catch (e) {
+      return json(200, { reset: 0, slug, error: (e as Error).message });
+    }
+  }
+
   const cors = project.defaults.cors ? CORS_HEADERS : {};
 
   if (req.method === "OPTIONS" && project.defaults.cors) {
@@ -71,6 +85,34 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
 
   const parsed = await parseRequest(req, subPath);
   const result = resolve(parsed, project);
+
+  // Plan 10: a matched rule with response variants — pick one per
+  // (slug, ruleId, session) and bump the counter. resolve() already built
+  // variant[0]; applyState overrides it, or returns null (not stateful, or
+  // the counter store was unavailable) and variant[0] stands.
+  let stateHeaders: Record<string, string> = {};
+  if (
+    result.matchedRuleId !== null &&
+    result.matchedRoute?.responses &&
+    process.env.MIRAGE_STATEFUL !== "off"
+  ) {
+    try {
+      const store = await getRuntimeStore();
+      const state = await applyState(store, slug, result);
+      if (state) {
+        result.status = state.status;
+        result.body = state.body;
+        result.headers = { ...state.headers };
+        result.warnings.push(...state.warnings);
+        stateHeaders = {
+          "x-mirage-variant": String(state.variantIndex),
+          "x-mirage-session": state.session,
+        };
+      }
+    } catch (e) {
+      console.error(`[state] apply failed for "${slug}": ${(e as Error).message}`);
+    }
+  }
 
   // Plan 07: the proxy is strictly a fallback for what the mock does not know.
   // Only an *unmatched* request can reach it, so turning it on can never change
@@ -151,6 +193,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
   const headers: Record<string, string> = {
     ...result.headers,
     ...cors,
+    ...stateHeaders,
     "x-mock-rule-id": result.matchedRuleId ?? "",
     "x-mock-matched": String(result.matchedRuleId !== null),
   };

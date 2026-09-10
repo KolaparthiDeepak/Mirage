@@ -206,6 +206,34 @@ export class PostgresStore implements Store {
     });
   }
 
+  async bumpCounter(slug: string, ruleId: string, session: string): Promise<number> {
+    await this.ready;
+    const rows = await this.sql<{ n: number }[]>`
+      insert into counter (slug, rule_id, session, n) values (${slug}, ${ruleId}, ${session}, 1)
+      on conflict (slug, rule_id, session)
+      do update set n = counter.n + 1, updated_at = now()
+      returning n
+    `;
+    return Number(rows[0]!.n);
+  }
+
+  async resetCounters(slug: string, ruleId?: string, session?: string): Promise<number> {
+    await this.ready;
+    const res = await this.sql`
+      delete from counter
+      where slug = ${slug}
+        ${ruleId != null ? this.sql`and rule_id = ${ruleId}` : this.sql``}
+        ${session != null ? this.sql`and session = ${session}` : this.sql``}
+    `;
+    return res.count;
+  }
+
+  async pruneCounters(cutoff: Date): Promise<number> {
+    await this.ready;
+    const res = await this.sql`delete from counter where updated_at < ${cutoff.toISOString()}`;
+    return res.count;
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }

@@ -123,6 +123,17 @@ export interface Store {
    *  noisy project from evicting a quiet one." Returns the number deleted. */
   pruneTraffic(before: Date, maxRowsPerProject: number): Promise<number>;
 
+  /** Plan 10: atomic increment of the (slug, ruleId, session) call counter,
+   *  returning the post-increment value (1 on the first call). A single
+   *  `insert ... on conflict do update` — correct under concurrency. */
+  bumpCounter(slug: string, ruleId: string, session: string): Promise<number>;
+  /** Zeroes counters. Omit ruleId/session to widen the scope: (slug) resets
+   *  the whole project, (slug, ruleId) one rule, all three one session.
+   *  Returns the number of counter rows removed. */
+  resetCounters(slug: string, ruleId?: string, session?: string): Promise<number>;
+  /** TTL sweep — deletes counters idle since before `cutoff`. */
+  pruneCounters(cutoff: Date): Promise<number>;
+
   /** Releases the underlying connection/handle. Every driver and every test
    *  must call this when done — a leaked SQLite file handle fails Windows CI,
    *  a leaked Postgres connection exhausts the pool. */

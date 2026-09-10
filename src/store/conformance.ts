@@ -300,6 +300,44 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(remaining.map((r) => r.id)).toEqual([recent.id]);
     });
 
+    it("bumpCounter increments atomically per (slug, rule, session), returning the new value", async () => {
+      const s = await get();
+      const slug = uniqueSlug("counter");
+      expect(await s.bumpCounter(slug, "r", "sess")).toBe(1);
+      expect(await s.bumpCounter(slug, "r", "sess")).toBe(2);
+      expect(await s.bumpCounter(slug, "r", "other")).toBe(1); // separate session
+      expect(await s.bumpCounter(slug, "r2", "sess")).toBe(1); // separate rule
+    });
+
+    it("concurrent bumpCounter calls produce no duplicate values", async () => {
+      const s = await get();
+      const slug = uniqueSlug("counter-race");
+      const results = await Promise.all(Array.from({ length: 20 }, () => s.bumpCounter(slug, "r", "sess")));
+      expect([...results].sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    });
+
+    it("resetCounters honours its scope", async () => {
+      const s = await get();
+      const slug = uniqueSlug("counter-reset");
+      await s.bumpCounter(slug, "r1", "a");
+      await s.bumpCounter(slug, "r1", "b");
+      await s.bumpCounter(slug, "r2", "a");
+
+      expect(await s.resetCounters(slug, "r1", "a")).toBe(1); // one session
+      expect(await s.bumpCounter(slug, "r1", "a")).toBe(1); // back to 1
+      expect(await s.bumpCounter(slug, "r1", "b")).toBe(2); // untouched
+
+      expect(await s.resetCounters(slug)).toBeGreaterThanOrEqual(2); // whole project
+    });
+
+    it("pruneCounters deletes counters idle before the cutoff", async () => {
+      const s = await get();
+      const slug = uniqueSlug("counter-prune");
+      await s.bumpCounter(slug, "r", "sess");
+      expect(await s.pruneCounters(new Date(Date.now() + 60_000))).toBeGreaterThanOrEqual(1);
+      expect(await s.bumpCounter(slug, "r", "sess")).toBe(1); // was swept, restarts
+    });
+
     it("pruneTraffic caps rows per project, keeping the newest", async () => {
       const s = await get();
       const slug = uniqueSlug("traffic-prune-count");

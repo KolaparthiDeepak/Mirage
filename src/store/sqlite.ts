@@ -227,6 +227,30 @@ export class SqliteStore implements Store {
     return tx(before.toISOString(), maxRowsPerProject);
   }
 
+  async bumpCounter(slug: string, ruleId: string, session: string): Promise<number> {
+    const row = this.db
+      .prepare(
+        `insert into counter (slug, rule_id, session, n) values (?, ?, ?, 1)
+         on conflict(slug, rule_id, session)
+         do update set n = n + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         returning n`,
+      )
+      .get(slug, ruleId, session) as { n: number };
+    return row.n;
+  }
+
+  async resetCounters(slug: string, ruleId?: string, session?: string): Promise<number> {
+    const clauses = ["slug = @slug"];
+    const params: Record<string, unknown> = { slug };
+    if (ruleId != null) { clauses.push("rule_id = @ruleId"); params.ruleId = ruleId; }
+    if (session != null) { clauses.push("session = @session"); params.session = session; }
+    return this.db.prepare(`delete from counter where ${clauses.join(" and ")}`).run(params).changes;
+  }
+
+  async pruneCounters(cutoff: Date): Promise<number> {
+    return this.db.prepare("delete from counter where updated_at < ?").run(cutoff.toISOString()).changes;
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }

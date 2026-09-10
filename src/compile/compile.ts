@@ -109,13 +109,17 @@ export function assertResponseValid(resp: MockResponse): void {
 // Exported so the store's config-cache (plan 02) can compile a stored rule the
 // same way a file-defined one is compiled — one conversion, not two.
 export function toRoute(rule: Rule): Route {
+  // Plan 10: a variant rule's default (and the value every resolve()-path
+  // reader sees) is variant[0]. The state layer overrides it per session.
+  const response = rule.response ?? rule.responses!.variants[0]!;
   return {
     id: rule.id,
     method: rule.request.method,
     path: rule.request.path,
     segments: compileSegments(rule.request.path),
     match: rule.request.match as Route["match"],
-    response: rule.response,
+    response,
+    responses: rule.responses,
   };
 }
 
@@ -211,7 +215,9 @@ export async function compileMocks(
           continue;
         }
         try {
-          assertResponseValid(rule.response);
+          for (const resp of rule.response ? [rule.response] : rule.responses!.variants) {
+            assertResponseValid(resp);
+          }
         } catch (e) {
           if (e instanceof TemplateError) { errors.push(`${label}: rule "${rule.id}": ${e.message}`); continue; }
           throw e;

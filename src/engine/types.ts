@@ -30,6 +30,20 @@ export interface MockResponse {
   body?: unknown;                        // object | string | null
 }
 
+/** Plan 10 — stateful variants. `response` above stays the default; when
+ *  `responses` is present the state layer (src/state/apply.ts) picks a
+ *  variant per (slug, ruleId, session). resolve() never reads this. */
+export interface ResponseVariant extends MockResponse {
+  weight?: number;
+  when?: { callCount: { gte?: number; lt?: number; eq?: number } };
+}
+export interface ResponseVariants {
+  strategy: "sequence" | "weighted" | "conditional";
+  variants: ResponseVariant[];
+  repeatLast: boolean;
+  sessionHeader?: string;
+}
+
 export interface Route {
   id: string;
   method: HttpMethod | "*";
@@ -37,6 +51,7 @@ export interface Route {
   segments: Segment[];
   match?: MatchCondition[];
   response: MockResponse;
+  responses?: ResponseVariants;          // plan 10 — absent means "not stateful"
 }
 
 /** Plan 07. Passive data on ProjectConfig: `resolve()` never reads it — the
@@ -73,4 +88,17 @@ export interface ResolveResult {
   matchedRuleId: string | null;
   delayMs: number;
   warnings: string[];                    // runtime template warnings
+  /** Plan 10: the matched route and the template context that built the
+   *  response, so the mock route can hand a *different* variant to
+   *  src/state/apply.ts without re-running resolve(). Undefined on notFound.
+   *  resolve() itself never reads these back. */
+  matchedRoute?: Route;
+  templateContext?: TemplateContext;
+}
+
+export interface TemplateContext {
+  body: unknown;
+  path: Record<string, string>;
+  query: Record<string, string>;
+  header: Record<string, string>;
 }

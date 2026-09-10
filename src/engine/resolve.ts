@@ -14,7 +14,10 @@ export function stripBasePath(path: string, basePath: string | undefined): strin
   return null;
 }
 
-function buildResponse(
+/** Exported for src/state/apply.ts (plan 10) — one implementation of
+ *  response-building, whether the variant comes from resolve() or the state
+ *  layer. */
+export function buildResponse(
   response: MockResponse,
   ctx: TemplateContext,
   warnings: string[],
@@ -48,7 +51,15 @@ export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResu
 
     const ctx: TemplateContext = { body: req.body, path: pm.params, query: req.query, header: req.headers };
     const built = buildResponse(route.response, ctx, warnings);
-    return { ...built, matchedRuleId: route.id, delayMs: project.defaults.delayMs, warnings };
+    return {
+      ...built,
+      matchedRuleId: route.id,
+      delayMs: project.defaults.delayMs,
+      warnings,
+      // Plan 10: handed to the mock route for src/state/apply.ts; ignored here.
+      matchedRoute: route,
+      templateContext: ctx,
+    };
   }
 
   return notFound(req, project, warnings);

@@ -24,6 +24,9 @@ function fakeStore(getProject: Store["getProject"]): Store {
     recordTraffic: async () => {},
     queryTraffic: async () => [],
     pruneTraffic: async () => 0,
+    bumpCounter: async () => 1,
+    resetCounters: async () => 0,
+    pruneCounters: async () => 0,
     close: async () => {},
   };
 }

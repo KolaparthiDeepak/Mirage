@@ -45,7 +45,9 @@ export function validateRuleDefinition(input: unknown): { rule: Rule } | { error
     return { error: Response.json({ error: 'rule path may not start with "/__" — reserved' }, { status: 400 }) };
   }
   try {
-    assertResponseValid(parsed.data.response);
+    for (const resp of parsed.data.response ? [parsed.data.response] : parsed.data.responses!.variants) {
+      assertResponseValid(resp);
+    }
   } catch (e) {
     if (e instanceof TemplateError) return { error: Response.json({ error: e.message }, { status: 400 }) };
     throw e;
