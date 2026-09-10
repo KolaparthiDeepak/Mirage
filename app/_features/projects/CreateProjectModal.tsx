@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Input, CopyButton, Modal } from "@/app/_ui";
-import { PreviewBadge } from "@/app/_shell/PreviewBadge";
+import { adminFetch, AdminAuthError } from "@/app/_lib/admin-token";
 import { slugify, newProjectYaml } from "@/app/_lib/scaffold-yaml";
 import styles from "./projects.module.css";
 
@@ -21,10 +22,36 @@ export function CreateProjectModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("blank");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [yaml, setYaml] = useState<string | null>(null);
   const slug = slugify(name) || "my-api";
+
+  function reset() {
+    setError(null);
+    setYaml(null);
+  }
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await adminFetch("/api/projects", { method: "POST", json: { name: name || "My API", slug } });
+      if (!res.ok) {
+        setError((await res.json()).error ?? `create failed (${res.status})`);
+        return;
+      }
+      onClose();
+      router.push(`/p/${slug}`);
+    } catch (e) {
+      setError(e instanceof AdminAuthError ? e.message : e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Modal open={open} onClose={onClose} title="Create a mock server">
@@ -36,7 +63,7 @@ export function CreateProjectModal({
             placeholder="My API"
             onChange={(e) => {
               setName(e.target.value);
-              setYaml(null);
+              reset();
             }}
           />
           <span className={styles.slugPreview}>slug: {slug}</span>
@@ -62,7 +89,7 @@ export function CreateProjectModal({
                       return;
                     }
                     setMode(s.id);
-                    setYaml(null);
+                    reset();
                   }}
                 >
                   <span className={styles.startCardLabel}>{s.label}</span>
@@ -73,33 +100,43 @@ export function CreateProjectModal({
           </div>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() =>
-            setYaml(yaml ? null : newProjectYaml({ name: name || "My API", slug }))
-          }
-        >
-          Generate YAML
-        </Button>
-
-        {yaml ? (
-          <div className={styles.yamlBlock}>
-            <pre className={styles.pre}>{yaml}</pre>
-            <CopyButton text={() => yaml} label="Copy YAML" />
-            <PreviewBadge />
-            <p className={styles.note}>
-              Create <code>mocks/{slug}/project.yaml</code> with this and redeploy
-              — the browser can&apos;t add projects.
-              {mode === "openapi" ? (
-                <>
-                  {" "}
-                  Also drop your spec file into{" "}
-                  <code>mocks/{slug}/openapi/</code>.
-                </>
-              ) : null}
-            </p>
-          </div>
-        ) : null}
+        {mode === "blank" ? (
+          <>
+            <Button variant="primary" onClick={create} disabled={busy || !name.trim()}>
+              {busy ? "Creating…" : "Create"}
+            </Button>
+            {error ? (
+              <p role="alert" className={styles.note}>
+                {error}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setYaml(yaml ? null : newProjectYaml({ name: name || "My API", slug }))}
+            >
+              Generate YAML
+            </Button>
+            {yaml ? (
+              <div className={styles.yamlBlock}>
+                <pre className={styles.pre}>{yaml}</pre>
+                <CopyButton text={() => yaml} label="Copy YAML" />
+                <p className={styles.note}>
+                  Create <code>mocks/{slug}/project.yaml</code> with this and redeploy — this
+                  starter imports through the repo, not the browser, for now.
+                  {mode === "openapi" ? (
+                    <>
+                      {" "}
+                      Also drop your spec file into <code>mocks/{slug}/openapi/</code>.
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     </Modal>
   );

@@ -1,5 +1,6 @@
 "use client";
 import { use, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useProject } from "@/app/_lib/view-model-context";
 import { commandCode } from "@/app/_lib/endpoint-label";
 import { Button, EmptyState } from "@/app/_ui";
@@ -12,6 +13,7 @@ import styles from "@/app/_features/cases/cases.module.css";
 export default function CasesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const project = useProject(slug)!;
+  const router = useRouter();
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -36,6 +38,7 @@ export default function CasesPage({ params }: { params: Promise<{ slug: string }
       <CreateCaseModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        slug={slug}
         endpoints={project.endpoints}
       />
 
@@ -56,6 +59,10 @@ export default function CasesPage({ params }: { params: Promise<{ slug: string }
                     cases={e.cases}
                     selectedId={selectedCaseId}
                     onSelect={setSelectedCaseId}
+                    slug={slug}
+                    method={e.method}
+                    path={e.path}
+                    onChanged={() => router.refresh()}
                   />
                 )}
               </section>

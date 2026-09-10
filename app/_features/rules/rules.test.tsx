@@ -1,14 +1,30 @@
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { afterEach, describe, it, expect } from "vitest";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { PreviewProvider } from "@/app/_lib/preview-store";
 import { ToastProvider } from "@/app/_ui";
+import { setAdminToken } from "@/app/_lib/admin-token";
 import type { CaseVM, EndpointVM } from "@/src/viewer/model";
 import { RuleList } from "./RuleList";
 import { RuleBuilder } from "./RuleBuilder";
 
+let fetchSpy: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  const store = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+  });
+  setAdminToken("test-token");
+  fetchSpy = vi.fn(async () => ({ ok: true, json: async () => ({ warning: null }) }));
+  global.fetch = fetchSpy as unknown as typeof fetch;
+});
+
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 function makeCase(over: Partial<CaseVM>): CaseVM {
@@ -78,28 +94,42 @@ describe("RuleBuilder", () => {
     );
   }
 
-  it("writes a condition to the preview store and exports matching YAML", () => {
+  it("hydrates from the selected case's own match conditions on load", () => {
+    renderBuilder();
+    // "alpha" is selected by default (endpoint.cases[0]) and already has one
+    // match condition — the builder must show it, not start blank.
+    expect((screen.getByLabelText("Condition field") as HTMLInputElement).value).toBe("body.cardLast4");
+    expect((screen.getByLabelText("Condition value") as HTMLInputElement).value).toBe("0001");
+  });
+
+  it("saves an edited condition via PATCH and reports success", async () => {
     renderBuilder();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add condition" }));
-    fireEvent.change(screen.getByLabelText("Condition field"), {
-      target: { value: "body.cardLast4" },
-    });
-    fireEvent.change(screen.getByLabelText("Condition operator"), {
-      target: { value: "equals" },
-    });
-    fireEvent.change(screen.getByLabelText("Condition value"), {
-      target: { value: "0001" },
-    });
-    fireEvent.change(screen.getByLabelText("Return case"), {
-      target: { value: "alpha" },
-    });
+    fireEvent.change(screen.getByLabelText("Condition value"), { target: { value: "0002" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    const stored = JSON.parse(sessionStorage.getItem("mirage-preview")!);
-    expect(stored.rulesDraft[endpoint.key][0].field).toBe("body.cardLast4");
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("/api/projects/x/rules/alpha");
+    expect(init.method).toBe("PATCH");
+    const body = JSON.parse(init.body);
+    expect(body.id).toBe("alpha");
+    expect(body.request.match).toEqual([{ jsonPath: "$.cardLast4", equals: "0002" }]);
+    expect(body.response).toEqual(endpoint.cases[0]!.expected);
+    await waitFor(() => expect(screen.getByText(/Saved/)).toBeDefined());
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Export YAML" }));
-    const pre = screen.getByText(/jsonPath: \$\.cardLast4/);
-    expect(pre.textContent).toContain('equals: "0001"');
+  it("switching the edited case re-hydrates its own conditions", () => {
+    renderBuilder();
+    fireEvent.change(screen.getByLabelText("Editing case"), { target: { value: "gamma" } });
+    expect((screen.getByLabelText("Condition field") as HTMLInputElement).value).toBe("header.X-Env");
+    expect((screen.getByLabelText("Condition value") as HTMLInputElement).value).toBe("qa");
+  });
+
+  it("shows the server's shadow warning after a save", async () => {
+    fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ warning: 'rule "alpha" is unreachable — rule "beta" above already matches everything it matches' }) });
+    renderBuilder();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByText(/unreachable/)).toBeDefined());
   });
 });

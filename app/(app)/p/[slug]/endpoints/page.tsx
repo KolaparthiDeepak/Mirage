@@ -78,6 +78,7 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
       <CreateEndpointModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        slug={slug}
       />
 
       {workspaceKey ? (

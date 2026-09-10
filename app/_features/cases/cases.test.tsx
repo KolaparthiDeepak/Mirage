@@ -118,10 +118,23 @@ describe("CaseRow truncation", () => {
     expect(screen.getByText("500")).toBeDefined();
   });
 
-  it("badges the row overflow menu as preview", () => {
-    render(<CaseRow case_={mk("c1")} />);
-    fireEvent.click(screen.getByRole("button", { name: "Case actions (preview)" }));
-    expect(screen.getByText("Preview — edit cases in the repo")).toBeDefined();
+  it("disables Duplicate/Delete without slug/method/path, but Edit still works (plan 03)", () => {
+    const onSelect = vi.fn();
+    render(<CaseRow case_={mk("c1")} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: "Case actions" }));
+    expect(screen.getByText("Duplicate").closest("[aria-disabled]")).toBeTruthy();
+    expect(screen.getByText("Delete").closest("[aria-disabled]")).toBeTruthy();
+    // Clicking Edit closes the menu (Dropdown unmounts its items on select) —
+    // exercised last, since it's not something to assert menu state against.
+    fireEvent.click(screen.getByText("Edit"));
+    expect(onSelect).toHaveBeenCalled();
+  });
+
+  it("enables Duplicate/Delete once slug/method/path are supplied (plan 03)", () => {
+    render(<CaseRow case_={mk("c1")} slug="demo" method="GET" path="/x" />);
+    fireEvent.click(screen.getByRole("button", { name: "Case actions" }));
+    expect(screen.getByText("Duplicate").closest("[aria-disabled]")).toBeNull();
+    expect(screen.getByText("Delete").closest("[aria-disabled]")).toBeNull();
   });
 
   it(".label carries the ellipsis rule in the CSS module", () => {

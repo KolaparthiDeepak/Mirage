@@ -1,19 +1,39 @@
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { ProjectConfigProvider } from "@/app/_lib/project-config-context";
 import { ViewModelProvider } from "@/app/_lib/view-model-context";
 import { ToastProvider } from "@/app/_ui";
+import { setAdminToken } from "@/app/_lib/admin-token";
 import type { ProjectVM } from "@/src/viewer/model";
 import { SettingsTabs } from "./SettingsTabs";
 
-const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+const { replace, push } = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ replace, push }),
   usePathname: () => "/p/card-block-lost/settings",
 }));
 
-afterEach(() => cleanup());
+let fetchSpy: ReturnType<typeof vi.fn>;
+beforeEach(() => {
+  const store = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+  });
+  setAdminToken("test-token");
+  fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+  global.fetch = fetchSpy as unknown as typeof fetch;
+});
+
+afterEach(() => {
+  replace.mockClear();
+  push.mockClear();
+  vi.unstubAllGlobals();
+  cleanup();
+});
 
 const proj: ProjectVM = {
   slug: "card-block-lost",
@@ -54,14 +74,16 @@ describe("SettingsTabs", () => {
     expect(screen.getByDisplayValue("/commands")).toBeDefined();
   });
 
-  it("emits project.yaml (edited keys only, no defaults block)", () => {
+  it("General tab saves for real via PATCH", async () => {
     renderTabs();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Generate project.yaml" }),
-    );
-    const pre = screen.getByText(/name: "Card Block \(Lost Card\)"/);
-    expect(pre.textContent).toContain('slug: "card-block-lost"');
-    expect(pre.textContent).not.toContain("defaults");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("/api/projects/card-block-lost");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body)).toEqual({ name: "Card Block (Lost Card)", basePath: "/commands" });
+    await waitFor(() => expect(screen.getByText(/Saved/)).toBeDefined());
   });
 
   it("shows read-only server facts", () => {
@@ -71,12 +93,24 @@ describe("SettingsTabs", () => {
     expect(screen.getByText("0 ms")).toBeDefined();
   });
 
-  it("opens an explain-only modal in the Danger Zone — deletes nothing", () => {
+  it("Danger Zone requires typing the slug before deleting for real", async () => {
     renderTabs();
     fireEvent.click(screen.getByRole("tab", { name: "Danger Zone" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete project" }));
-    expect(
-      screen.getByText(/this UI can't delete anything/i),
-    ).toBeDefined();
+
+    const confirmBtn = screen.getByRole("button", { name: "Delete permanently" }) as HTMLButtonElement;
+    expect(confirmBtn.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Type the project slug to confirm"), {
+      target: { value: "card-block-lost" },
+    });
+    expect(confirmBtn.disabled).toBe(false);
+
+    fireEvent.click(confirmBtn);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe("/api/projects/card-block-lost");
+    expect(init.method).toBe("DELETE");
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projects"));
   });
 });
