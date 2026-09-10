@@ -103,7 +103,9 @@ function assertResponseValid(resp: MockResponse): void {
   }
 }
 
-function toRoute(rule: Rule): Route {
+// Exported so the store's config-cache (plan 02) can compile a stored rule the
+// same way a file-defined one is compiled — one conversion, not two.
+export function toRoute(rule: Rule): Route {
   return {
     id: rule.id,
     method: rule.request.method,

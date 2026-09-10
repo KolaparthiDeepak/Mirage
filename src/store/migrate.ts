@@ -1,5 +1,9 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// This package is "type": "module" — __dirname doesn't exist in ESM scope.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface Migration {
   /** Filename with the dialect suffix stripped, e.g. "001-init". Sorted

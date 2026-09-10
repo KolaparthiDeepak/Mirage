@@ -3,6 +3,7 @@ import type { CompiledBundle } from "@/src/compile/compile";
 import { parseRequest } from "@/src/engine/request";
 import { resolve } from "@/src/engine/resolve";
 import type { ProjectConfig } from "@/src/engine/types";
+import { configSource, getStoreConfig } from "@/src/store/runtime-source";
 
 const bundle = bundleJson as unknown as CompiledBundle;
 
@@ -16,11 +17,19 @@ function json(status: number, body: unknown, extra: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...extra } });
 }
 
+// Plan 02 step 4, scoped to this route only. Default (no MIRAGE_CONFIG_SOURCE,
+// or any value other than "store") is the exact bundle lookup this route
+// always did — no behavior change, no store import, no DB touched.
+async function getProject(slug: string): Promise<ProjectConfig | undefined> {
+  if (configSource() === "store") return (await getStoreConfig(slug)) ?? undefined;
+  return bundle.projects[slug];
+}
+
 async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }): Promise<Response> {
   const { slug: parts } = await ctx.params;
   const slug = parts[0]!;
   const subPath = "/" + parts.slice(1).join("/");
-  const project: ProjectConfig | undefined = bundle.projects[slug];
+  const project = await getProject(slug);
 
   if (!project) return json(404, { error: "unknown project", slug });
 

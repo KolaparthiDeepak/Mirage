@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "node scripts/check.mjs",
-    "new-project": "node scripts/new-project.mjs"
+    "new-project": "node scripts/new-project.mjs",
+    "sync": "tsx scripts/sync-cli.ts"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "10.1.1",
