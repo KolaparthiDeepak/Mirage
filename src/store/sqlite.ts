@@ -181,15 +181,24 @@ export class SqliteStore implements Store {
   async queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]> {
     const limit = filter.limit ?? 50;
     const clauses = ["slug = @slug"];
-    if (filter.before) clauses.push("at < @before");
+    const params: Record<string, unknown> = { slug: filter.slug, limit };
+    if (filter.id) { clauses.push("id = @id"); params.id = filter.id; }
+    if (filter.before) { clauses.push("at < @before"); params.before = filter.before; }
+    if (filter.since) { clauses.push("at > @since"); params.since = filter.since; }
     if (filter.unmatchedOnly === true) clauses.push("matched_rule_id is null");
     else if (filter.unmatchedOnly === false) clauses.push("matched_rule_id is not null");
+    if (filter.method) { clauses.push("method = @method"); params.method = filter.method; }
+    if (filter.ruleId) { clauses.push("matched_rule_id = @ruleId"); params.ruleId = filter.ruleId; }
+    if (filter.pathContains) { clauses.push("path like @pathContains"); params.pathContains = `%${filter.pathContains}%`; }
+    if (filter.statusFrom != null) { clauses.push("status >= @statusFrom"); params.statusFrom = filter.statusFrom; }
+    if (filter.statusTo != null) { clauses.push("status <= @statusTo"); params.statusTo = filter.statusTo; }
 
+    // since= (polling) wants oldest-first so a client appends in arrival
+    // order; every other query wants newest-first.
+    const order = filter.since ? "at asc" : "at desc";
     const rows = this.db
-      .prepare(
-        `select * from traffic where ${clauses.join(" and ")} order by at desc limit @limit`,
-      )
-      .all({ slug: filter.slug, before: filter.before ?? null, limit }) as SqliteTrafficRow[];
+      .prepare(`select * from traffic where ${clauses.join(" and ")} order by ${order} limit @limit`)
+      .all(params) as SqliteTrafficRow[];
     return rows.map(sqliteRowToTrafficEntry);
   }
 

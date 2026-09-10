@@ -164,13 +164,23 @@ export class PostgresStore implements Store {
   async queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]> {
     await this.ready;
     const limit = filter.limit ?? 50;
+    // since= (polling) wants oldest-first so a client appends in arrival
+    // order; every other query wants newest-first.
+    const order = filter.since ? this.sql`order by at asc` : this.sql`order by at desc`;
     const rows = await this.sql<PgTrafficRow[]>`
       select * from traffic
       where slug = ${filter.slug}
+        ${filter.id ? this.sql`and id = ${filter.id}` : this.sql``}
         ${filter.before ? this.sql`and at < ${filter.before}` : this.sql``}
+        ${filter.since ? this.sql`and at > ${filter.since}` : this.sql``}
         ${filter.unmatchedOnly === true ? this.sql`and matched_rule_id is null` : this.sql``}
         ${filter.unmatchedOnly === false ? this.sql`and matched_rule_id is not null` : this.sql``}
-      order by at desc
+        ${filter.method ? this.sql`and method = ${filter.method}` : this.sql``}
+        ${filter.ruleId ? this.sql`and matched_rule_id = ${filter.ruleId}` : this.sql``}
+        ${filter.pathContains ? this.sql`and path like ${"%" + filter.pathContains + "%"}` : this.sql``}
+        ${filter.statusFrom != null ? this.sql`and status >= ${filter.statusFrom}` : this.sql``}
+        ${filter.statusTo != null ? this.sql`and status <= ${filter.statusTo}` : this.sql``}
+      ${order}
       limit ${limit}
     `;
     return rows.map(pgRowToTrafficEntry);

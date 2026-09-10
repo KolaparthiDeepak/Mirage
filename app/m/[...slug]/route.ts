@@ -1,17 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
-import bundleJson from "@/mocks.generated.json";
-import type { CompiledBundle } from "@/src/compile/compile";
 import { parseRequest } from "@/src/engine/request";
 import { resolve } from "@/src/engine/resolve";
-import type { ProjectConfig } from "@/src/engine/types";
 import { clientHash, clientIp } from "@/src/store/client-hash";
 import { redactBody, redactHeaders } from "@/src/store/redact";
-import { configSource, getRuntimeStore, getStoreConfig } from "@/src/store/runtime-source";
+import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
 import { shouldRecord, truncateBody } from "@/src/store/traffic-limits";
 import type { TrafficEntry } from "@/src/store/types";
-
-const bundle = bundleJson as unknown as CompiledBundle;
 
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -21,20 +16,6 @@ const CORS_HEADERS: Record<string, string> = {
 
 function json(status: number, body: unknown, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...extra } });
-}
-
-// Plan 02 step 4, scoped to this route only. Default (no MIRAGE_CONFIG_SOURCE,
-// or any value other than "store") is the exact bundle lookup this route
-// always did — no behavior change, no store import, no DB touched.
-async function getProject(slug: string): Promise<{ project: ProjectConfig; configVersion: number | null } | undefined> {
-  if (configSource() === "store") {
-    const result = await getStoreConfig(slug);
-    return result ? { project: result.config, configVersion: result.version } : undefined;
-  }
-  const project = bundle.projects[slug];
-  // No version concept for a static, per-deploy bundle — nothing to compare
-  // "an hour ago" against within one deploy's lifetime.
-  return project ? { project, configVersion: null } : undefined;
 }
 
 // Plan 04: recording is independent of where *config* came from — a
@@ -57,10 +38,10 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
   const { slug: parts } = await ctx.params;
   const slug = parts[0]!;
   const subPath = "/" + parts.slice(1).join("/");
-  const found = await getProject(slug);
+  const found = await getCurrentConfig(slug);
 
   if (!found) return json(404, { error: "unknown project", slug });
-  const { project, configVersion } = found;
+  const { config: project, configVersion } = found;
 
   // Introspection: /m/<slug>/__spec — served here because Next.js excludes the
   // underscore-prefixed `__spec` folder from routing, so a dedicated route file

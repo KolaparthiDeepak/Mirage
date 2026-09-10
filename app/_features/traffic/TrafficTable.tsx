@@ -1,7 +1,7 @@
 "use client";
 import type { KeyboardEvent } from "react";
 import { EmptyState } from "@/app/_ui";
-import type { TrafficEntry } from "./types";
+import type { TrafficEntry } from "@/src/store/types";
 import { TrafficRow } from "./TrafficRow";
 import styles from "./traffic.module.css";
 
@@ -38,6 +38,7 @@ export function TrafficTable({ entries, selectedId, onSelect }: Props) {
             <th scope="col">Method</th>
             <th scope="col">Endpoint</th>
             <th scope="col">Status</th>
+            <th scope="col">Rule</th>
             <th scope="col">Time</th>
             <th scope="col">Duration</th>
           </tr>

@@ -87,9 +87,9 @@ describe("Project Overview page", () => {
     expect(screen.getByText("3")).toBeDefined();
   });
 
-  it("marks unbacked sections with a Preview badge", () => {
+  it("carries no Preview badge — traffic and stats are real as of plan 05", () => {
     renderPage();
-    expect(screen.getAllByText("Preview").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Preview")).toBeNull();
   });
 
   it("shows the honest empty state for traffic until plan 05 wires it up (plan 04)", () => {

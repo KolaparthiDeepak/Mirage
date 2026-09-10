@@ -2,24 +2,20 @@
 import { use } from "react";
 import Link from "next/link";
 import { useProject } from "@/app/_lib/view-model-context";
+import { useTraffic } from "@/app/_lib/use-traffic";
 import { Badge, CopyButton, MethodPill, StatusCode, EmptyState } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
-import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import { mockPath, mockBaseUrl } from "@/app/_lib/mock-url";
 import { ProjectStats } from "@/app/_features/overview/ProjectStats";
-import type { TrafficEntry } from "@/app/_features/traffic/types";
 import styles from "@/app/_features/overview/overview.module.css";
 
 const DESCRIPTION = "Mock API — response selection driven by the request.";
 
-// The backend now records real traffic (plan 04) — this section just isn't
-// wired to query it yet (plan 05). An honest empty state until then; the
-// EmptyState branch below already exists for exactly this case.
-const traffic: TrafficEntry[] = [];
-
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const project = useProject(slug)!;
+  const { rows: traffic } = useTraffic([slug], {}, false);
+  const recent = traffic.slice(0, 5);
 
   return (
     <>
@@ -47,9 +43,8 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
       <section className={styles.traffic}>
         <div className={styles.trafficHead}>
           <h2 className={styles.h2}>Recent traffic</h2>
-          <PreviewBadge />
         </div>
-        {traffic.length === 0 ? (
+        {recent.length === 0 ? (
           <EmptyState
             title="No traffic yet"
             body="Requests to this mock API will appear here."
@@ -65,7 +60,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
               </tr>
             </thead>
             <tbody>
-              {traffic.map((e) => (
+              {recent.map((e) => (
                 <tr key={e.id}>
                   <td>
                     <MethodPill method={e.method} />
@@ -74,7 +69,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                   <td>
                     <StatusCode code={e.status} />
                   </td>
-                  <td>{e.ms} ms</td>
+                  <td>{e.durationMs} ms</td>
                 </tr>
               ))}
             </tbody>

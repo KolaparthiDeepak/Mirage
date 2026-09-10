@@ -1,108 +1,118 @@
 "use client";
 import { useMemo, useState } from "react";
-import { useDebounced } from "@/app/_lib/use-debounced";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Button, Input, Select } from "@/app/_ui";
-import type { ProjectVM } from "@/src/viewer/model";
-import type { TrafficEntry } from "./types";
+import { useTraffic, type TrafficQuery } from "@/app/_lib/use-traffic";
+import { useDebounced } from "@/app/_lib/use-debounced";
+import { buildHar } from "./har";
 import { TrafficTable } from "./TrafficTable";
 import { TrafficDrawer } from "./TrafficDrawer";
 import styles from "./traffic.module.css";
 
-export type TrafficRowVM = { entry: TrafficEntry; project: ProjectVM };
+function download(filename: string, data: unknown, mimeType: string) {
+  const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const blob = new Blob([text], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 0);
+}
 
 export function TrafficView({
-  rows,
+  slugs,
   exportName,
 }: {
-  rows: TrafficRowVM[];
+  slugs: string[];
   exportName: string;
 }) {
-  const methods = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.entry.method))),
-    [rows],
-  );
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const [search, setSearch] = useState("");
-  const [method, setMethod] = useState("");
+  // Filters live in the URL (plan 05) — the same pattern EndpointWorkspace
+  // uses for ?e=/?c=, so a filtered view is a shareable link.
+  const query: TrafficQuery = {
+    method: searchParams.get("method") ?? "",
+    status: (searchParams.get("status") as TrafficQuery["status"]) ?? "",
+    matched: (searchParams.get("matched") as TrafficQuery["matched"]) ?? "",
+    path: searchParams.get("path") ?? "",
+  };
+  const [pathInput, setPathInput] = useState(query.path ?? "");
+  const debouncedPath = useDebounced(pathInput, 200);
+  const [live, setLive] = useState(true);
   const [selId, setSelId] = useState<string | null>(null);
-  const q = useDebounced(search, 150).trim().toLowerCase();
 
-  const filtered = useMemo(
-    () =>
-      rows.filter(({ entry }) => {
-        if (method && entry.method !== method) return false;
-        if (!q) return true;
-        return (
-          entry.path.toLowerCase().includes(q) ||
-          entry.method.toLowerCase().includes(q) ||
-          String(entry.status).includes(q)
-        );
-      }),
-    [rows, method, q],
+  const effectiveQuery = useMemo(
+    (): TrafficQuery => ({ method: query.method, status: query.status, matched: query.matched, path: debouncedPath }),
+    [query.method, query.status, query.matched, debouncedPath],
   );
+  const { rows, loading } = useTraffic(slugs, effectiveQuery, live);
 
-  function exportJson() {
-    const payload = rows.map((r) => ({ ...r.entry, project: r.project.slug }));
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = exportName;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 0);
+  function setParam(key: string, value: string) {
+    const sp = new URLSearchParams(searchParams.toString());
+    if (value) sp.set(key, value);
+    else sp.delete(key);
+    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
   }
 
-  // Look the selection up in the full list, not `filtered`, so filtering the
-  // selected row out of the table doesn't leave the drawer open with no content.
-  const selected = rows.find((r) => r.entry.id === selId) ?? null;
+  const selected = rows.find((r) => r.id === selId) ?? null;
 
   return (
     <>
       <div className={styles.toolbar}>
         <Input
           aria-label="Search traffic"
-          placeholder="Filter by path, method, status…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filter by path…"
+          value={pathInput}
+          onChange={(e) => {
+            setPathInput(e.target.value);
+            setParam("path", e.target.value);
+          }}
         />
-        <Select
-          aria-label="Filter by method"
-          value={method}
-          onChange={(e) => setMethod(e.target.value)}
-        >
+        <Select aria-label="Filter by method" value={query.method} onChange={(e) => setParam("method", e.target.value)}>
           <option value="">All methods</option>
-          {methods.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
+          {["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => (
+            <option key={m} value={m}>{m}</option>
           ))}
         </Select>
+        <Select aria-label="Filter by status" value={query.status} onChange={(e) => setParam("status", e.target.value)}>
+          <option value="">All statuses</option>
+          {["2xx", "3xx", "4xx", "5xx"].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </Select>
+        <Select aria-label="Filter by matched" value={query.matched} onChange={(e) => setParam("matched", e.target.value)}>
+          <option value="">Matched + unmatched</option>
+          <option value="false">Unmatched only</option>
+          <option value="true">Matched only</option>
+        </Select>
         <Button
-          className={styles.toolbarEnd}
-          variant="secondary"
-          onClick={exportJson}
+          variant={live ? "primary" : "secondary"}
+          onClick={() => setLive((v) => !v)}
+          aria-pressed={live}
         >
-          Export
+          {live ? "● Live" : "Paused"}
+        </Button>
+        <Button className={styles.toolbarEnd} variant="secondary" onClick={() => download(exportName, rows, "application/json")}>
+          Export JSON
+        </Button>
+        <Button variant="secondary" onClick={() => download(exportName.replace(/\.json$/, ".har"), buildHar(rows), "application/json")}>
+          Export HAR
         </Button>
       </div>
 
-      <TrafficTable
-        entries={filtered.map((r) => r.entry)}
-        selectedId={selId}
-        onSelect={setSelId}
-      />
-      <TrafficDrawer
-        entry={selected?.entry ?? null}
-        project={selected?.project ?? null}
-        open={selected != null}
-        onClose={() => setSelId(null)}
-      />
+      {loading ? (
+        <p className={styles.muted}>Loading…</p>
+      ) : (
+        <TrafficTable entries={rows} selectedId={selId} onSelect={setSelId} />
+      )}
+      <TrafficDrawer entry={selected} open={selected != null} onClose={() => setSelId(null)} />
     </>
   );
 }

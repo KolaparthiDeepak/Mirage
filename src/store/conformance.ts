@@ -199,6 +199,46 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(rows.map((r) => r.id)).toEqual([unmatched.id]);
     });
 
+    it("queryTraffic fetches one row by id", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-by-id");
+      await s.recordTraffic(trafficEntry(slug));
+      const target = trafficEntry(slug);
+      await s.recordTraffic(target);
+      const rows = await s.queryTraffic({ slug, id: target.id });
+      expect(rows.map((r) => r.id)).toEqual([target.id]);
+    });
+
+    it("queryTraffic filters by method, ruleId, pathContains and status range", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-filters");
+      const target = trafficEntry(slug, { method: "POST", path: "/orders/create", matchedRuleId: "create-order", status: 201 });
+      await s.recordTraffic(target);
+      await s.recordTraffic(trafficEntry(slug, { method: "GET", path: "/orders/list", matchedRuleId: "list-orders", status: 200 }));
+      await s.recordTraffic(trafficEntry(slug, { method: "POST", path: "/orders/create", matchedRuleId: "create-order", status: 500 }));
+
+      expect((await s.queryTraffic({ slug, method: "POST" })).length).toBe(2);
+      expect((await s.queryTraffic({ slug, ruleId: "list-orders" })).map((r) => r.id)).toEqual([expect.any(String)]);
+      expect((await s.queryTraffic({ slug, pathContains: "create" })).length).toBe(2);
+      expect((await s.queryTraffic({ slug, statusFrom: 500, statusTo: 599 })).length).toBe(1);
+      expect((await s.queryTraffic({ slug, method: "POST", pathContains: "create", statusFrom: 200, statusTo: 299 })).map((r) => r.id)).toEqual([
+        target.id,
+      ]);
+    });
+
+    it("queryTraffic with `since` returns only newer rows, oldest first", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-since");
+      await s.recordTraffic(trafficEntry(slug, { at: "2026-05-01T00:00:00.000Z" }));
+      const b = trafficEntry(slug, { at: "2026-05-01T00:00:01.000Z" });
+      const c = trafficEntry(slug, { at: "2026-05-01T00:00:02.000Z" });
+      await s.recordTraffic(b);
+      await s.recordTraffic(c);
+
+      const rows = await s.queryTraffic({ slug, since: "2026-05-01T00:00:00.500Z" });
+      expect(rows.map((r) => r.id)).toEqual([b.id, c.id]); // oldest first, unlike the default newest-first order
+    });
+
     it("round-trips redacted-looking bodies, query params and warnings untouched", async () => {
       const s = await get();
       const slug = uniqueSlug("traffic-shape");

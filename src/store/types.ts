@@ -66,14 +66,26 @@ export interface TrafficEntry {
 
 export interface TrafficFilter {
   slug: string;
+  /** Exact id — for the detail view and the match-trace endpoint (plan 06). */
+  id?: string;
   /** Defaults to a small page — callers page explicitly via `before`. */
   limit?: number;
   /** Only rows strictly older than this ISO timestamp — cursor pagination by
    *  `at`, newest-first. */
   before?: string;
+  /** Only rows strictly newer than this ISO timestamp — the live tail's poll
+   *  cursor (plan 05). Combining with `before` is meaningless and not used. */
+  since?: string;
   /** true: only unmatched rows (the plan 05 "unmatched inbox"); false: only
    *  matched; omitted: both. */
   unmatchedOnly?: boolean;
+  method?: string;
+  ruleId?: string;
+  /** Case-sensitive substring match on `path`. */
+  pathContains?: string;
+  /** Inclusive status range — e.g. 500/599 for the 5xx class. */
+  statusFrom?: number;
+  statusTo?: number;
 }
 
 /**

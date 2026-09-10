@@ -10,8 +10,13 @@
 // flag is at its default "bundle" — a real risk on Vercel, not just bundle
 // bloat. A dynamic import means neither is ever loaded unless someone
 // actually sets MIRAGE_CONFIG_SOURCE=store.
+import bundleJson from "@/mocks.generated.json";
+import type { CompiledBundle } from "../compile/compile";
+import type { ProjectConfig } from "../engine/types";
 import type { Store } from "./types";
 import type { ConfigResult } from "./config-cache";
+
+const bundle = bundleJson as unknown as CompiledBundle;
 
 export function configSource(): "store" | "bundle" {
   return process.env.MIRAGE_CONFIG_SOURCE === "store" ? "store" : "bundle";
@@ -32,4 +37,23 @@ export async function getRuntimeStore(): Promise<Store> {
 export async function getStoreConfig(slug: string): Promise<ConfigResult | null> {
   const [store, { getConfig }] = await Promise.all([getRuntimeStore(), import("./config-cache")]);
   return getConfig(store, slug);
+}
+
+export interface CurrentConfig {
+  config: ProjectConfig;
+  /** null for a bundle-sourced project — no version concept within one
+   *  deploy's lifetime (see the mock route's getProject). */
+  configVersion: number | null;
+}
+
+/** The one place that resolves "what config answers requests for this slug
+ *  right now" — used by the mock route and by the match-trace endpoint (plan
+ *  06), so they can never disagree about which project a slug names. */
+export async function getCurrentConfig(slug: string): Promise<CurrentConfig | undefined> {
+  if (configSource() === "store") {
+    const result = await getStoreConfig(slug);
+    return result ? { config: result.config, configVersion: result.version } : undefined;
+  }
+  const config = bundle.projects[slug];
+  return config ? { config, configVersion: null } : undefined;
 }
