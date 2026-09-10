@@ -5,6 +5,7 @@ import { resolve } from "@/src/engine/resolve";
 import type { UpstreamConfig } from "@/src/engine/types";
 import { proxyUnmatchedRequest } from "@/src/proxy";
 import { applyState } from "@/src/state/apply";
+import { computeFaults, faultRng, mangleBody, type FaultOutcome } from "@/src/faults/apply";
 import { clientHash, clientIp } from "@/src/store/client-hash";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
@@ -175,8 +176,34 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     return new Response(outcome.response.bodyText, { status: outcome.response.status, headers: resHeaders });
   }
 
-  if (result.delayMs > 0) {
-    await new Promise((r) => setTimeout(r, Math.min(result.delayMs, 9000)));
+  // Plan 11: fault injection. Applied after resolve()/applyState, only when
+  // `faults.enabled` and MIRAGE_FAULTS !== "off". A seeded project bumps a
+  // per-rule counter (session "__faults") so the failure sequence is
+  // reproducible; an unseeded one uses Math.random.
+  let faultOutcome: FaultOutcome | null = null;
+  if (project.faults?.enabled && process.env.MIRAGE_FAULTS !== "off") {
+    const ruleKey = result.matchedRuleId ?? "__unmatched";
+    try {
+      let callCount = 0;
+      if (project.faults.seed) {
+        const store = await getRuntimeStore();
+        callCount = await store.bumpCounter(slug, ruleKey, "__faults");
+      }
+      faultOutcome = computeFaults(project.faults, faultRng(project.faults, ruleKey, callCount));
+      if (faultOutcome.override) {
+        result.status = faultOutcome.override.status;
+        result.body = faultOutcome.override.body;
+        result.headers = { "content-type": "application/json" };
+      }
+      result.warnings.push(...faultOutcome.notes.map((n) => `fault: ${n}`));
+    } catch (e) {
+      console.error(`[faults] compute failed for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  const totalDelayMs = Math.min(result.delayMs + (faultOutcome?.extraDelayMs ?? 0), 9000);
+  if (totalDelayMs > 0) {
+    await new Promise((r) => setTimeout(r, totalDelayMs));
   }
 
   console.log(JSON.stringify({
@@ -194,6 +221,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     ...result.headers,
     ...cors,
     ...stateHeaders,
+    ...(faultOutcome && faultOutcome.notes.length > 0 ? { "x-mirage-fault": faultOutcome.notes.join("; ") } : {}),
     "x-mock-rule-id": result.matchedRuleId ?? "",
     "x-mock-matched": String(result.matchedRuleId !== null),
   };
@@ -208,6 +236,13 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
   } else {
     payload = JSON.stringify(result.body);
     resBodyText = payload;
+  }
+
+  // Plan 11: a `malformed` fault mangles the serialized body just before it
+  // goes out — after recording captures the intended body below.
+  if (faultOutcome?.malform) {
+    payload = mangleBody(resBodyText, faultOutcome.malform, faultRng(project.faults!, result.matchedRuleId ?? "__unmatched", 0));
+    delete headers["content-length"];
   }
 
   // Plan 04: written after the response, in Next's after() (the App Router

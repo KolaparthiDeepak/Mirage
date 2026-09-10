@@ -67,6 +67,21 @@ export interface UpstreamConfig {
   timeoutMs: number;
 }
 
+/** Plan 11 — fault injection. Passive data on ProjectConfig: resolve() never
+ *  reads it; faults are applied in the mock route after the response is built. */
+export interface FaultsConfig {
+  enabled: boolean;
+  latency?: {
+    mode: "fixed" | "jitter" | "spike";
+    baseMs: number;
+    jitterMs: number;
+    spike?: { percent: number; ms: number };
+  };
+  errorRate?: { percent: number; status: number; body?: unknown };
+  malformed?: { percent: number; mode: "truncate" | "invalidJson" | "emptyBody" };
+  seed?: string;
+}
+
 export interface ProjectConfig {
   name: string;
   slug: string;
@@ -79,6 +94,7 @@ export interface ProjectConfig {
   routes: Route[];
   openApiDoc?: unknown;                  // merged OpenAPI, if any
   upstream?: UpstreamConfig;             // plan 07 — absent means "off"
+  faults?: FaultsConfig;                 // plan 11 — absent / enabled:false means "off"
 }
 
 export interface ResolveResult {

@@ -93,6 +93,19 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect((await s.getProject(without))?.upstream).toBeUndefined();
     });
 
+    it("round-trips the faults config (plan 11)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("faults");
+      const faults = {
+        enabled: true,
+        latency: { mode: "jitter" as const, baseMs: 50, jitterMs: 20 },
+        errorRate: { percent: 5, status: 503 },
+        seed: "release-42",
+      };
+      await s.saveProject(project(slug, { faults }));
+      expect((await s.getProject(slug))?.faults).toEqual(faults);
+    });
+
     it("orders rules by position, independent of insertion order", async () => {
       const s = await get();
       const slug = uniqueSlug("order");

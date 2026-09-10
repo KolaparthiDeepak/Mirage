@@ -10,6 +10,7 @@ interface ProjectRow {
   openapi_doc: string | null;
   source: "repo" | "store";
   upstream: string | null;
+  faults: string | null;
   config_version: number;
   updated_at: string;
 }
@@ -29,6 +30,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     openApiDoc: row.openapi_doc ? JSON.parse(row.openapi_doc) : undefined,
     source: row.source,
     upstream: row.upstream ? (JSON.parse(row.upstream) as StoredProject["upstream"]) : undefined,
+    faults: row.faults ? (JSON.parse(row.faults) as StoredProject["faults"]) : undefined,
     configVersion: row.config_version,
     updatedAt: row.updated_at,
     rules: rules
@@ -107,12 +109,12 @@ export class SqliteStore implements Store {
 
       this.db
         .prepare(
-          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, config_version, updated_at)
-           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @configVersion, @updatedAt)
+          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, config_version, updated_at)
+           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @faults, @configVersion, @updatedAt)
            on conflict(slug) do update set
              name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
              openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
-             config_version = excluded.config_version, updated_at = excluded.updated_at`,
+             faults = excluded.faults, config_version = excluded.config_version, updated_at = excluded.updated_at`,
         )
         .run({
           slug: project.slug,
@@ -122,6 +124,7 @@ export class SqliteStore implements Store {
           openApiDoc: project.openApiDoc != null ? JSON.stringify(project.openApiDoc) : null,
           source: project.source,
           upstream: project.upstream != null ? JSON.stringify(project.upstream) : null,
+          faults: project.faults != null ? JSON.stringify(project.faults) : null,
           configVersion: nextVersion,
           updatedAt: now,
         });

@@ -61,11 +61,63 @@ export const upstreamSchema = z
   })
   .strict();
 
+// Plan 11 — fault injection. Everything defaults off; a project without a
+// `faults` block behaves exactly as before. The 5000 ms latency cap has
+// headroom under vercel.json's maxDuration: 10.
+const LATENCY_CAP_MS = 5000;
+
+const latencySchema = z
+  .object({
+    mode: z.enum(["fixed", "jitter", "spike"]).default("fixed"),
+    baseMs: z.number().int().min(0).default(0),
+    jitterMs: z.number().int().min(0).default(0),
+    spike: z.object({ percent: z.number().min(0).max(100), ms: z.number().int().min(0) }).strict().optional(),
+  })
+  .strict()
+  .superRefine((l, ctx) => {
+    const worst =
+      l.mode === "jitter" ? l.baseMs + l.jitterMs : l.mode === "spike" ? l.baseMs + (l.spike?.ms ?? 0) : l.baseMs;
+    if (worst > LATENCY_CAP_MS) {
+      ctx.addIssue({
+        code: "custom",
+        message: `worst-case injected latency ${worst}ms exceeds the ${LATENCY_CAP_MS}ms cap (base ${l.baseMs} + ${
+          l.mode === "jitter" ? `jitter ${l.jitterMs}` : `spike ${l.spike?.ms ?? 0}`
+        })`,
+      });
+    }
+  });
+
+export const faultsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    latency: latencySchema.optional(),
+    errorRate: z
+      .object({
+        percent: z.number().min(0).max(100),
+        status: z.number().int().min(400).max(599).default(503),
+        body: z.unknown().optional(),
+      })
+      .strict()
+      .optional(),
+    malformed: z
+      .object({
+        percent: z.number().min(0).max(100),
+        mode: z.enum(["truncate", "invalidJson", "emptyBody"]).default("truncate"),
+      })
+      .strict()
+      .optional(),
+    /** When set, fault selection is `hash(seed + ruleId + callCount)` —
+     *  reproducible across runs. Absent → genuine randomness. */
+    seed: z.string().min(1).optional(),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
     slug: z.string().regex(slugRe, "slug must match ^[a-z0-9][a-z0-9-]{0,62}$"),
     upstream: upstreamSchema.optional(),
+    faults: faultsSchema.optional(),
     // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
     // body. Default true; an existing project with examples throughout is
     // unaffected either way.

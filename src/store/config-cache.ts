@@ -24,6 +24,7 @@ export function compileStoredProject(stored: StoredProject): ProjectConfig {
     defaults: stored.defaults,
     openApiDoc: stored.openApiDoc,
     upstream: stored.upstream,
+    faults: stored.faults,
     routes: [...stored.rules]
       .sort((a, b) => a.position - b.position)
       .map((r) => toRoute(r.definition)),

@@ -1,5 +1,5 @@
 import type { Rule } from "../compile/schema";
-import type { MockResponse, UpstreamConfig } from "../engine/types";
+import type { FaultsConfig, MockResponse, UpstreamConfig } from "../engine/types";
 
 /** Project metadata as stored — everything compileMocks() would read from
  *  project.yaml, plus the bookkeeping fields the store adds. */
@@ -14,6 +14,8 @@ export interface StoredProjectMeta {
   source: "repo" | "store";
   /** Plan 07. Absent means "no upstream" — same as `{ mode: "off" }`. */
   upstream?: UpstreamConfig;
+  /** Plan 11. Absent or `enabled:false` means "no faults". */
+  faults?: FaultsConfig;
   configVersion: number;
   updatedAt: string; // ISO-8601
 }

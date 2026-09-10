@@ -1,7 +1,7 @@
 // Plan 03: PATCH /api/projects/:slug (name/basePath/defaults), DELETE (requires
 // the client to have the user type the slug to confirm — that's a UI gate;
 // the server just deletes on request).
-import { projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
+import { faultsSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
@@ -27,6 +27,7 @@ export async function PATCH(
     basePath?: string;
     defaults?: Record<string, unknown>;
     upstream?: unknown;
+    faults?: unknown;
     ifVersion?: number;
   };
 
@@ -66,12 +67,30 @@ export async function PATCH(
     }
   }
 
+  // Plan 11: faults are opt-in. `null` clears it; the schema's superRefine
+  // rejects a latency config that could exceed the 5000ms cap, with the
+  // arithmetic in the message.
+  let faults = project.faults;
+  if ("faults" in parsedBody) {
+    if (parsedBody.faults == null) {
+      faults = undefined;
+    } else {
+      const shape = faultsSchema.safeParse(parsedBody.faults);
+      if (!shape.success) {
+        const issue = shape.error.issues[0]!;
+        return Response.json({ error: `faults.${issue.path.join(".") || "config"}: ${issue.message}` }, { status: 400 });
+      }
+      faults = shape.data;
+    }
+  }
+
   const merged = {
     ...project,
     name: parsedBody.name ?? project.name,
     basePath: "basePath" in parsedBody ? parsedBody.basePath : project.basePath,
     defaults: { ...project.defaults, ...(parsedBody.defaults ?? {}) },
     upstream,
+    faults,
   };
   const validated = projectYamlSchema.safeParse({ name: merged.name, slug, basePath: merged.basePath, defaults: merged.defaults });
   if (!validated.success) {
