@@ -157,12 +157,12 @@ export class PostgresStore implements Store {
       insert into traffic
         (id, slug, at, method, path, query, req_headers, req_body, status,
          res_headers, res_body, matched_rule_id, duration_ms, warnings,
-         client_hash, config_version, truncated, via_upstream)
+         client_hash, config_version, truncated, via_upstream, direction)
       values (
         ${entry.id}, ${entry.slug}, ${entry.at}, ${entry.method}, ${entry.path},
         ${this.sql.json(toJsonb(entry.query))}, ${this.sql.json(toJsonb(entry.reqHeaders))}, ${entry.reqBody}, ${entry.status},
         ${this.sql.json(toJsonb(entry.resHeaders))}, ${entry.resBody}, ${entry.matchedRuleId}, ${entry.durationMs},
-        ${this.sql.json(toJsonb(entry.warnings))}, ${entry.clientHash}, ${entry.configVersion}, ${entry.truncated}, ${entry.viaUpstream}
+        ${this.sql.json(toJsonb(entry.warnings))}, ${entry.clientHash}, ${entry.configVersion}, ${entry.truncated}, ${entry.viaUpstream}, ${entry.direction}
       )
     `;
   }
@@ -261,6 +261,7 @@ interface PgTrafficRow {
   config_version: number | null;
   truncated: boolean;
   via_upstream: boolean;
+  direction: "inbound" | "outbound";
 }
 
 function pgRowToTrafficEntry(row: PgTrafficRow): TrafficEntry {
@@ -283,5 +284,6 @@ function pgRowToTrafficEntry(row: PgTrafficRow): TrafficEntry {
     configVersion: row.config_version != null ? Number(row.config_version) : null,
     truncated: row.truncated,
     viaUpstream: row.via_upstream,
+    direction: row.direction ?? "inbound",
   };
 }

@@ -120,6 +120,7 @@ export function toRoute(rule: Rule): Route {
     match: rule.request.match as Route["match"],
     response,
     responses: rule.responses,
+    callback: rule.callback as Route["callback"],
   };
 }
 

@@ -157,11 +157,11 @@ export class SqliteStore implements Store {
         `insert into traffic
            (id, slug, at, method, path, query, req_headers, req_body, status,
             res_headers, res_body, matched_rule_id, duration_ms, warnings,
-            client_hash, config_version, truncated, via_upstream)
+            client_hash, config_version, truncated, via_upstream, direction)
          values
            (@id, @slug, @at, @method, @path, @query, @reqHeaders, @reqBody, @status,
             @resHeaders, @resBody, @matchedRuleId, @durationMs, @warnings,
-            @clientHash, @configVersion, @truncated, @viaUpstream)`,
+            @clientHash, @configVersion, @truncated, @viaUpstream, @direction)`,
       )
       .run({
         id: entry.id,
@@ -182,6 +182,7 @@ export class SqliteStore implements Store {
         configVersion: entry.configVersion,
         truncated: entry.truncated ? 1 : 0,
         viaUpstream: entry.viaUpstream ? 1 : 0,
+        direction: entry.direction,
       });
   }
 
@@ -278,6 +279,7 @@ interface SqliteTrafficRow {
   config_version: number | null;
   truncated: number;
   via_upstream: number;
+  direction: "inbound" | "outbound";
 }
 
 function sqliteRowToTrafficEntry(row: SqliteTrafficRow): TrafficEntry {
@@ -300,5 +302,6 @@ function sqliteRowToTrafficEntry(row: SqliteTrafficRow): TrafficEntry {
     configVersion: row.config_version,
     truncated: row.truncated === 1,
     viaUpstream: row.via_upstream === 1,
+    direction: row.direction ?? "inbound",
   };
 }

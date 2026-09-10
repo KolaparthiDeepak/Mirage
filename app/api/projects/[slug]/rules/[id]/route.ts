@@ -1,5 +1,6 @@
 // Plan 03: PATCH /api/projects/:slug/rules/:id (full-definition replace,
 // position kept), DELETE /api/projects/:slug/rules/:id.
+import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../../../_lib/admin-auth";
@@ -37,6 +38,14 @@ export async function PATCH(
   const rule = validated.rule;
   if (rule.id !== id) {
     return Response.json({ error: "a rule's id cannot be changed via edit — delete and recreate it instead" }, { status: 400 });
+  }
+  if (rule.callback) {
+    try {
+      await assertSafeUpstreamUrl(rule.callback.url);
+    } catch (e) {
+      if (e instanceof UpstreamError) return Response.json({ error: `callback.url: ${e.message}` }, { status: 400 });
+      throw e;
+    }
   }
   if (project.rules.some((r) => r.ruleId === rule.id && r !== existing)) {
     return Response.json({ error: `rule id "${rule.id}" collides with another rule` }, { status: 409 });

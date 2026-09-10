@@ -388,6 +388,7 @@ function trafficEntry(slug: string, overrides: Partial<TrafficEntry> = {}): Traf
     configVersion: 1,
     truncated: false,
     viaUpstream: false,
+    direction: "inbound",
     ...overrides,
   };
 }

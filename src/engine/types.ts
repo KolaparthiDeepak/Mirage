@@ -44,6 +44,17 @@ export interface ResponseVariants {
   sessionHeader?: string;
 }
 
+/** Plan 12 — an async callback fired after the response. resolve() never
+ *  reads this; the mock route schedules delivery. */
+export interface CallbackConfig {
+  url: string;
+  method: "POST" | "PUT" | "PATCH" | "GET" | "DELETE";
+  delayMs: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+  retry?: { attempts: number; backoffMs: number };
+}
+
 export interface Route {
   id: string;
   method: HttpMethod | "*";
@@ -52,6 +63,7 @@ export interface Route {
   match?: MatchCondition[];
   response: MockResponse;
   responses?: ResponseVariants;          // plan 10 — absent means "not stateful"
+  callback?: CallbackConfig;             // plan 12 — absent means "no callback"
 }
 
 /** Plan 07. Passive data on ProjectConfig: `resolve()` never reads it — the

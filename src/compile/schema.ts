@@ -185,6 +185,23 @@ const matchConditionSchema = z.record(z.unknown()).superRefine((obj, ctx) => {
   }
 });
 
+// Plan 12 — callbacks. delayMs is capped at 5000 in this pass: that is the
+// `waitUntil` path, which needs no queue infrastructure. Longer delays (the
+// callback_queue + cron path) are a follow-up.
+export const callbackSchema = z
+  .object({
+    url: z.string().url().startsWith("https://", "callback url must be https://"),
+    method: z.enum(["POST", "PUT", "PATCH", "GET", "DELETE"]).default("POST"),
+    delayMs: z.number().int().min(0).max(5000).default(0),
+    headers: z.record(z.string()).optional(),
+    body: z.unknown().optional(),
+    retry: z
+      .object({ attempts: z.number().int().min(1).max(3).default(1), backoffMs: z.number().int().min(0).max(5000).default(1000) })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 export const ruleSchema = z
   .object({
     id: z.string().min(1),
@@ -208,6 +225,7 @@ export const ruleSchema = z
       .strict(),
     response: mockResponseSchema.optional(),
     responses: responseVariantsSchema.optional(),
+    callback: callbackSchema.optional(),
   })
   .strict()
   .superRefine((r, ctx) => {

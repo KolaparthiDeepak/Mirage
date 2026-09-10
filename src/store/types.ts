@@ -68,6 +68,9 @@ export interface TrafficEntry {
   truncated: boolean;
   /** Plan 07: this exchange was served by the project's upstream, not a rule. */
   viaUpstream: boolean;
+  /** Plan 12: "outbound" for a callback Mirage sent; "inbound" for a request
+   *  it received (the default). */
+  direction: "inbound" | "outbound";
 }
 
 export interface TrafficFilter {

@@ -6,6 +6,7 @@ import type { UpstreamConfig } from "@/src/engine/types";
 import { proxyUnmatchedRequest } from "@/src/proxy";
 import { applyState } from "@/src/state/apply";
 import { computeFaults, faultRng, mangleBody, type FaultOutcome } from "@/src/faults/apply";
+import { deliverCallback, type CallbackContext } from "@/src/callbacks/deliver";
 import { clientHash, clientIp } from "@/src/store/client-hash";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
@@ -162,6 +163,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
             configVersion,
             truncated: reqBody.truncated || resBody.truncated || rec.truncated,
             viaUpstream: true,
+            direction: "inbound",
           }),
         );
       } catch (e) {
@@ -285,10 +287,57 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
           configVersion,
           truncated: reqBody.truncated || resBody.truncated,
           viaUpstream: false,
+          direction: "inbound",
         }),
       );
     } catch (e) {
       console.error(`[traffic] could not schedule recording for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  // Plan 12: a matched rule with a callback fires it after the response, in
+  // after() (delay <= 5s — the waitUntil path). Each delivery attempt is
+  // recorded as an *outbound* traffic row so a silent failure is visible.
+  const callback = result.matchedRoute?.callback;
+  if (callback && result.matchedRuleId !== null && process.env.MIRAGE_CALLBACKS !== "off") {
+    const cbCtx: CallbackContext = {
+      request: { path: result.templateContext?.path ?? {}, query: parsed.query, body: parsed.body },
+      response: { status: result.status, body: result.body },
+    };
+    try {
+      after(async () => {
+        try {
+          if (callback.delayMs > 0) await new Promise((r) => setTimeout(r, Math.min(callback.delayMs, 5000)));
+          const cb = await deliverCallback(slug, callback, cbCtx);
+          for (const a of cb.attempts) {
+            await recordTrafficEntry({
+              id: randomUUID(),
+              slug,
+              at: new Date().toISOString(),
+              method: callback.method,
+              path: a.url,
+              query: {},
+              reqHeaders: {},
+              reqBody: null,
+              status: a.status,
+              resHeaders: {},
+              resBody: a.error ?? null,
+              matchedRuleId: result.matchedRuleId,
+              durationMs: 0,
+              warnings: [...cb.warnings, ...(a.error ? [`callback attempt ${a.attempt}: ${a.error}`] : [])],
+              clientHash: null,
+              configVersion,
+              truncated: false,
+              viaUpstream: false,
+              direction: "outbound",
+            });
+          }
+        } catch (e) {
+          console.error(`[callback] delivery failed for "${slug}": ${(e as Error).message}`);
+        }
+      });
+    } catch (e) {
+      console.error(`[callback] could not schedule for "${slug}": ${(e as Error).message}`);
     }
   }
 
