@@ -38,6 +38,12 @@ async function fetchSlug(slug: string, qs: string): Promise<TrafficEntry[]> {
   }
 }
 
+// Sentinel used when a project has zero traffic yet: distinguishes "haven't
+// completed the initial fetch" (real null, poll must wait) from "did fetch,
+// found nothing yet" (poll from the beginning of time so the first row that
+// ever lands gets picked up — see the bug this fixed, below).
+const EPOCH = new Date(0).toISOString();
+
 export function useTraffic(slugs: string[], query: TrafficQuery, live: boolean) {
   const [rows, setRows] = useState<TrafficEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +60,12 @@ export function useTraffic(slugs: string[], query: TrafficQuery, live: boolean) 
       if (cancelled) return;
       const merged = perSlug.flat().sort((a, b) => (a.at < b.at ? 1 : -1));
       setRows(merged);
-      cursorRef.current = merged[0]?.at ?? null;
+      // Bug: this used to fall back to `null` when merged was empty, and the
+      // poll below treats `null` as "not ready yet" and skips every tick —
+      // so a brand-new project with zero traffic never started polling, no
+      // matter how long "live" stayed true. EPOCH means "ready, saw nothing
+      // yet" instead of "not ready".
+      cursorRef.current = merged[0]?.at ?? EPOCH;
       setLoading(false);
     });
     return () => {

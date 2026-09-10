@@ -7,6 +7,7 @@ import { useProject, useViewModel } from "@/app/_lib/view-model-context";
 import { searchViewModel } from "@/app/_lib/search";
 import { commandCode } from "@/app/_lib/endpoint-label";
 import { toggleTheme } from "@/app/_lib/theme";
+import { REPLAY_INTRO_EVENT } from "@/app/_shell/IntroSplash";
 import { mockBaseUrl } from "@/app/_lib/mock-url";
 import { copyToClipboard } from "@/app/_lib/clipboard";
 import { projectHref, endpointHref, caseHref } from "@/app/_lib/nav";
@@ -70,6 +71,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         run: () => toast("Preview — the cross-project endpoints page is coming soon"),
       },
       { id: "go-traffic", label: "Go to Traffic", run: () => router.push("/traffic") },
+      {
+        id: "replay-intro",
+        label: "Replay intro animation",
+        run: () => window.dispatchEvent(new Event(REPLAY_INTRO_EVENT)),
+      },
     ];
 
     if (project) {

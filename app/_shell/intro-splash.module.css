@@ -5,7 +5,7 @@
   background: var(--bg);
   display: grid;
   place-items: center;
-  transition: opacity 400ms ease;
+  transition: opacity 150ms ease;
 }
 
 .overlay[data-fadeout] {
