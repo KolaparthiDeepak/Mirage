@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { MethodPill, StatusCode } from "@/app/_ui";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import type { TrafficEntry } from "./sample-traffic";
+import type { TrafficEntry } from "./types";
 import styles from "./traffic.module.css";
 
 type Props = {

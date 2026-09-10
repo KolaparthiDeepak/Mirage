@@ -41,11 +41,46 @@ export interface ProjectSummary {
   updatedAt: string;
 }
 
+/** One recorded request/response (plan 04). Redacted and truncated by the
+ *  caller (src/store/redact.ts, src/store/traffic-limits.ts) before it ever
+ *  reaches a Store method — the store persists exactly what it is given. */
+export interface TrafficEntry {
+  id: string;
+  slug: string;
+  at: string; // ISO-8601
+  method: string;
+  path: string;
+  query: Record<string, string>;
+  reqHeaders: Record<string, string>;
+  reqBody: string | null;
+  status: number;
+  resHeaders: Record<string, string>;
+  resBody: string | null;
+  matchedRuleId: string | null;
+  durationMs: number;
+  warnings: string[];
+  clientHash: string | null;
+  configVersion: number | null;
+  truncated: boolean;
+}
+
+export interface TrafficFilter {
+  slug: string;
+  /** Defaults to a small page — callers page explicitly via `before`. */
+  limit?: number;
+  /** Only rows strictly older than this ISO timestamp — cursor pagination by
+   *  `at`, newest-first. */
+  before?: string;
+  /** true: only unmatched rows (the plan 05 "unmatched inbox"); false: only
+   *  matched; omitted: both. */
+  unmatchedOnly?: boolean;
+}
+
 /**
- * Config-side surface only (plan 02's rollout step 1). Traffic (plan 04) and
- * counters (plan 10) are added to this interface when those plans are actually
- * built — an interface method nobody has implemented yet is worse than no
- * method: it invites a caller to depend on something that throws.
+ * Config-side surface (plan 02) plus traffic (plan 04). Counters (plan 10)
+ * are added when that plan is actually built — an interface method nobody has
+ * implemented yet is worse than no method: it invites a caller to depend on
+ * something that throws.
  */
 export interface Store {
   getProject(slug: string): Promise<StoredProject | null>;
@@ -57,6 +92,19 @@ export interface Store {
   saveProject(p: StoredProject): Promise<void>;
   deleteProject(slug: string): Promise<void>;
   getConfigVersion(slug: string): Promise<number | null>;
+
+  /** Never throws in a way that should reach the caller's response — plan 04
+   *  rule 2: "a failed write is logged and swallowed." The *caller* (the mock
+   *  route) is responsible for the try/catch; the store method itself is
+   *  allowed to throw so tests can observe a failure, but production call
+   *  sites must never await this without a catch. */
+  recordTraffic(entry: TrafficEntry): Promise<void>;
+  queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]>;
+  /** Deletes rows older than `before` OR beyond `maxRowsPerProject` per slug
+   *  (keeping the newest), whichever is more aggressive — plan 04: "keeps one
+   *  noisy project from evicting a quiet one." Returns the number deleted. */
+  pruneTraffic(before: Date, maxRowsPerProject: number): Promise<number>;
+
   /** Releases the underlying connection/handle. Every driver and every test
    *  must call this when done — a leaked SQLite file handle fails Windows CI,
    *  a leaked Postgres connection exhausts the pool. */

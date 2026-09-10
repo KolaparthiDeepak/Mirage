@@ -21,6 +21,9 @@ function fakeStore(getProject: Store["getProject"]): Store {
     saveProject: async () => {},
     deleteProject: async () => {},
     getConfigVersion: async () => null,
+    recordTraffic: async () => {},
+    queryTraffic: async () => [],
+    pruneTraffic: async () => 0,
     close: async () => {},
   };
 }
@@ -37,9 +40,10 @@ describe("config-cache", () => {
   it("compiles and caches on the first read", async () => {
     const getProject = vi.fn(async () => stubProject("v1"));
     const store = fakeStore(getProject);
-    const config = await getConfig(store, "p");
-    expect(config?.name).toBe("v1");
-    expect(config?.routes).toHaveLength(1);
+    const result = await getConfig(store, "p");
+    expect(result?.config.name).toBe("v1");
+    expect(result?.config.routes).toHaveLength(1);
+    expect(result?.version).toBe(1);
     expect(getProject).toHaveBeenCalledTimes(1);
   });
 
@@ -68,8 +72,8 @@ describe("config-cache", () => {
     await getConfig(store, "p");
     name = "v2";
     invalidateConfig("p");
-    const config = await getConfig(store, "p");
-    expect(config?.name).toBe("v2");
+    const result = await getConfig(store, "p");
+    expect(result?.config.name).toBe("v2");
     expect(getProject).toHaveBeenCalledTimes(2);
   });
 
@@ -90,8 +94,8 @@ describe("config-cache", () => {
 
     await getConfig(store, "p");
     vi.advanceTimersByTime(6_000); // force the TTL to expire so the next read hits the store
-    const config = await getConfig(store, "p");
-    expect(config?.name).toBe("v1"); // stale, but served — not thrown
+    const result = await getConfig(store, "p");
+    expect(result?.config.name).toBe("v1"); // stale, but served — not thrown
   });
 
   it("propagates the error when there is no cached fallback at all", async () => {

@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { loadMigrations } from "./migrate";
-import type { ProjectSummary, Store, StoredProject, StoredRule } from "./types";
+import type { ProjectSummary, Store, StoredProject, StoredRule, TrafficEntry, TrafficFilter } from "./types";
 
 interface ProjectRow {
   slug: string;
@@ -145,7 +145,117 @@ export class SqliteStore implements Store {
     return row?.config_version ?? null;
   }
 
+  async recordTraffic(entry: TrafficEntry): Promise<void> {
+    this.db
+      .prepare(
+        `insert into traffic
+           (id, slug, at, method, path, query, req_headers, req_body, status,
+            res_headers, res_body, matched_rule_id, duration_ms, warnings,
+            client_hash, config_version, truncated)
+         values
+           (@id, @slug, @at, @method, @path, @query, @reqHeaders, @reqBody, @status,
+            @resHeaders, @resBody, @matchedRuleId, @durationMs, @warnings,
+            @clientHash, @configVersion, @truncated)`,
+      )
+      .run({
+        id: entry.id,
+        slug: entry.slug,
+        at: entry.at,
+        method: entry.method,
+        path: entry.path,
+        query: JSON.stringify(entry.query),
+        reqHeaders: JSON.stringify(entry.reqHeaders),
+        reqBody: entry.reqBody,
+        status: entry.status,
+        resHeaders: JSON.stringify(entry.resHeaders),
+        resBody: entry.resBody,
+        matchedRuleId: entry.matchedRuleId,
+        durationMs: entry.durationMs,
+        warnings: JSON.stringify(entry.warnings),
+        clientHash: entry.clientHash,
+        configVersion: entry.configVersion,
+        truncated: entry.truncated ? 1 : 0,
+      });
+  }
+
+  async queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]> {
+    const limit = filter.limit ?? 50;
+    const clauses = ["slug = @slug"];
+    if (filter.before) clauses.push("at < @before");
+    if (filter.unmatchedOnly === true) clauses.push("matched_rule_id is null");
+    else if (filter.unmatchedOnly === false) clauses.push("matched_rule_id is not null");
+
+    const rows = this.db
+      .prepare(
+        `select * from traffic where ${clauses.join(" and ")} order by at desc limit @limit`,
+      )
+      .all({ slug: filter.slug, before: filter.before ?? null, limit }) as SqliteTrafficRow[];
+    return rows.map(sqliteRowToTrafficEntry);
+  }
+
+  async pruneTraffic(before: Date, maxRowsPerProject: number): Promise<number> {
+    const tx = this.db.transaction((cutoff: string, cap: number) => {
+      const byAge = this.db.prepare("delete from traffic where at < ?").run(cutoff).changes;
+      // Beyond the row cap, per project: delete everything past the newest `cap` rows.
+      const slugs = this.db.prepare("select distinct slug from traffic").all() as Array<{ slug: string }>;
+      let byCount = 0;
+      for (const { slug } of slugs) {
+        byCount += this.db
+          .prepare(
+            `delete from traffic where slug = ? and id in (
+               select id from traffic where slug = ? order by at desc limit -1 offset ?
+             )`,
+          )
+          .run(slug, slug, cap).changes;
+      }
+      return byAge + byCount;
+    });
+    return tx(before.toISOString(), maxRowsPerProject);
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }
+}
+
+interface SqliteTrafficRow {
+  id: string;
+  slug: string;
+  at: string;
+  method: string;
+  path: string;
+  query: string;
+  req_headers: string;
+  req_body: string | null;
+  status: number;
+  res_headers: string;
+  res_body: string | null;
+  matched_rule_id: string | null;
+  duration_ms: number;
+  warnings: string;
+  client_hash: string | null;
+  config_version: number | null;
+  truncated: number;
+}
+
+function sqliteRowToTrafficEntry(row: SqliteTrafficRow): TrafficEntry {
+  return {
+    id: row.id,
+    slug: row.slug,
+    at: row.at,
+    method: row.method,
+    path: row.path,
+    query: JSON.parse(row.query),
+    reqHeaders: JSON.parse(row.req_headers),
+    reqBody: row.req_body,
+    status: row.status,
+    resHeaders: JSON.parse(row.res_headers),
+    resBody: row.res_body,
+    matchedRuleId: row.matched_rule_id,
+    durationMs: row.duration_ms,
+    warnings: JSON.parse(row.warnings),
+    clientHash: row.client_hash,
+    configVersion: row.config_version,
+    truncated: row.truncated === 1,
+  };
 }

@@ -10,8 +10,8 @@
 // flag is at its default "bundle" — a real risk on Vercel, not just bundle
 // bloat. A dynamic import means neither is ever loaded unless someone
 // actually sets MIRAGE_CONFIG_SOURCE=store.
-import type { ProjectConfig } from "../engine/types";
 import type { Store } from "./types";
+import type { ConfigResult } from "./config-cache";
 
 export function configSource(): "store" | "bundle" {
   return process.env.MIRAGE_CONFIG_SOURCE === "store" ? "store" : "bundle";
@@ -19,8 +19,17 @@ export function configSource(): "store" | "bundle" {
 
 let lazyStore: Store | undefined;
 
-export async function getStoreConfig(slug: string): Promise<ProjectConfig | null> {
-  const [{ createStore }, { getConfig }] = await Promise.all([import("./index"), import("./config-cache")]);
+/** The one place both the config path and the traffic-recording path (plan
+ *  04) get a Store instance from — both need it independently of each other
+ *  (traffic recording works even when config is bundle-sourced), so both
+ *  route through this lazy singleton rather than each constructing their own. */
+export async function getRuntimeStore(): Promise<Store> {
+  const { createStore } = await import("./index");
   if (!lazyStore) lazyStore = createStore();
-  return getConfig(lazyStore, slug);
+  return lazyStore;
+}
+
+export async function getStoreConfig(slug: string): Promise<ConfigResult | null> {
+  const [store, { getConfig }] = await Promise.all([getRuntimeStore(), import("./config-cache")]);
+  return getConfig(store, slug);
 }

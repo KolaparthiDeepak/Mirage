@@ -92,8 +92,8 @@ describe("Project Overview page", () => {
     expect(screen.getAllByText("Preview").length).toBeGreaterThan(0);
   });
 
-  it("shows a recent-traffic row for a real endpoint path", () => {
+  it("shows the honest empty state for traffic until plan 05 wires it up (plan 04)", () => {
     renderPage();
-    expect(screen.getByText("/demo/GET_CARD/v1")).toBeDefined();
+    expect(screen.getByText("No traffic yet")).toBeDefined();
   });
 });

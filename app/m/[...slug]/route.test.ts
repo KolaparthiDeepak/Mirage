@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
+// after() requires Next's real request-scope (AsyncLocalStorage) context,
+// which calling the handler directly in a test never has. The traffic write
+// it schedules is exercised separately in route.store-source.test.ts; here it
+// only needs to not crash the route.
+vi.mock("next/server", () => ({ after: (cb: () => unknown) => void cb() }));
+
 vi.mock("@/mocks.generated.json", () => ({
   default: {
     builtAt: "t", commit: "c", warnings: [],

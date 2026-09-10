@@ -1,30 +1,25 @@
 "use client";
-import { useMemo } from "react";
 import { useViewModel } from "@/app/_lib/view-model-context";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
-import { sampleTraffic } from "@/app/_features/traffic/sample-traffic";
-import { TrafficView } from "@/app/_features/traffic/TrafficView";
+import { TrafficView, type TrafficRowVM } from "@/app/_features/traffic/TrafficView";
+
+// The backend now records real traffic (plan 04) — this page just isn't
+// wired to query it yet (plan 05). An honest empty state until then; no more
+// fabricated rows (see docs/plans/mirage/04-traffic-recording.md).
+const rows: TrafficRowVM[] = [];
 
 export default function WorkspaceTrafficPage() {
-  const model = useViewModel();
-
-  const rows = useMemo(
-    () =>
-      model.projects.flatMap((p) =>
-        sampleTraffic(p).map((entry) => ({ entry, project: p })),
-      ),
-    [model],
-  );
+  useViewModel(); // keeps this inside the ViewModel provider boundary for when plan 05 needs it
 
   return (
     <>
       <PageHeader
         title="Traffic"
-        description="Sample request log across all projects — the mock backend does not record traffic yet."
+        description="Requests to your mock APIs are recorded. This view isn't wired up to show them yet."
       />
       <PreviewBadge />
-      <TrafficView rows={rows} exportName="workspace-traffic-sample.json" />
+      <TrafficView rows={rows} exportName="workspace-traffic.json" />
     </>
   );
 }

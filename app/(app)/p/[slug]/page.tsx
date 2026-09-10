@@ -7,15 +7,19 @@ import { PageHeader } from "@/app/_shell/PageHeader";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import { mockPath, mockBaseUrl } from "@/app/_lib/mock-url";
 import { ProjectStats } from "@/app/_features/overview/ProjectStats";
-import { sampleTraffic } from "@/app/_features/traffic/sample-traffic";
+import type { TrafficEntry } from "@/app/_features/traffic/types";
 import styles from "@/app/_features/overview/overview.module.css";
 
 const DESCRIPTION = "Mock API — response selection driven by the request.";
 
+// The backend now records real traffic (plan 04) — this section just isn't
+// wired to query it yet (plan 05). An honest empty state until then; the
+// EmptyState branch below already exists for exactly this case.
+const traffic: TrafficEntry[] = [];
+
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const project = useProject(slug)!;
-  const traffic = sampleTraffic(project).slice(0, 5);
 
   return (
     <>

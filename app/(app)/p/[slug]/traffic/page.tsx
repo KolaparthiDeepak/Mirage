@@ -1,28 +1,26 @@
 "use client";
-import { use, useMemo } from "react";
+import { use } from "react";
 import { useProject } from "@/app/_lib/view-model-context";
 import { PageHeader } from "@/app/_shell/PageHeader";
 import { PreviewBadge } from "@/app/_shell/PreviewBadge";
-import { sampleTraffic } from "@/app/_features/traffic/sample-traffic";
-import { TrafficView } from "@/app/_features/traffic/TrafficView";
+import { TrafficView, type TrafficRowVM } from "@/app/_features/traffic/TrafficView";
+
+// The backend now records real traffic (plan 04) — this page just isn't
+// wired to query it yet (plan 05). An honest empty state until then.
+const rows: TrafficRowVM[] = [];
 
 export default function TrafficPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const project = useProject(slug)!;
-
-  const rows = useMemo(
-    () => sampleTraffic(project).map((entry) => ({ entry, project })),
-    [project],
-  );
+  useProject(slug); // keeps this inside the ViewModel provider boundary for when plan 05 needs it
 
   return (
     <>
       <PageHeader
         title="Traffic"
-        description="Sample request log — the mock backend does not record traffic yet."
+        description="Requests to this mock API are recorded. This view isn't wired up to show them yet."
       />
       <PreviewBadge />
-      <TrafficView rows={rows} exportName={`${slug}-traffic-sample.json`} />
+      <TrafficView rows={rows} exportName={`${slug}-traffic.json`} />
     </>
   );
 }

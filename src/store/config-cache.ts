@@ -29,6 +29,13 @@ export function compileStoredProject(stored: StoredProject): ProjectConfig {
   };
 }
 
+export interface ConfigResult {
+  config: ProjectConfig;
+  /** Which stored version produced this config — plan 04: without it, "this
+   *  worked an hour ago" is unanswerable once rules become editable. */
+  version: number;
+}
+
 /**
  * Read-through cache in front of a Store. On a store read error, serves the
  * last good config for that slug **unbounded** (never expires it on error) and
@@ -37,10 +44,10 @@ export function compileStoredProject(stored: StoredProject): ProjectConfig {
  * nothing to fall back to and the error propagates; the caller (the mock
  * route) treats that the same as "unknown project" today.
  */
-export async function getConfig(store: Store, slug: string): Promise<ProjectConfig | null> {
+export async function getConfig(store: Store, slug: string): Promise<ConfigResult | null> {
   const now = Date.now();
   const hit = cache.get(slug);
-  if (hit && now - hit.at < TTL_MS) return hit.config;
+  if (hit && now - hit.at < TTL_MS) return { config: hit.config, version: hit.version };
 
   let stored: StoredProject | null;
   try {
@@ -50,7 +57,7 @@ export async function getConfig(store: Store, slug: string): Promise<ProjectConf
       console.error(
         `[store] config read failed for "${slug}", serving cached config from ${new Date(hit.at).toISOString()}: ${(e as Error).message}`,
       );
-      return hit.config;
+      return { config: hit.config, version: hit.version };
     }
     throw e;
   }
@@ -61,7 +68,7 @@ export async function getConfig(store: Store, slug: string): Promise<ProjectConf
   }
   const config = compileStoredProject(stored);
   cache.set(slug, { config, version: stored.configVersion, at: now });
-  return config;
+  return { config, version: stored.configVersion };
 }
 
 /** Called after a save so the instance that served the save doesn't wait out

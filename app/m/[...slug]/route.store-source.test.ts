@@ -5,9 +5,19 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { SqliteStore } from "@/src/store/sqlite";
 import type { StoredProject } from "@/src/store/types";
+
+// after() needs Next's real request-scope context, unavailable when calling
+// the handler directly. Captured here instead of fire-and-forgotten, so tests
+// can deterministically await the traffic write plan 04 schedules through it.
+const scheduled: Promise<unknown>[] = [];
+vi.mock("next/server", () => ({
+  after: (cb: () => unknown) => {
+    scheduled.push(Promise.resolve(cb()));
+  },
+}));
 
 describe("mock route — store-sourced (plan 02 step 4)", () => {
   let dir: string;
@@ -71,5 +81,31 @@ describe("mock route — store-sourced (plan 02 step 4)", () => {
     });
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ error: "unknown project", slug: "ghost" });
+  });
+
+  // Plan 04's own first-listed test: "A mock request produces exactly one row
+  // with the right rule id and status." recordTraffic's independent pieces
+  // (redaction, truncation, sampling, the conformance suite) are unit-tested
+  // elsewhere; this is the one place they're proven wired together correctly.
+  it("records the request to the store via after()", async () => {
+    scheduled.length = 0;
+    const { POST } = await import("./route");
+    await POST(
+      new Request("https://x/m/demo/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer secret" },
+        body: JSON.stringify({ id: "1" }),
+      }),
+      { params: Promise.resolve({ slug: ["demo", "verify"] }) },
+    );
+    await Promise.all(scheduled);
+
+    const store = await (await import("@/src/store/runtime-source")).getRuntimeStore();
+    const rows = await store.queryTraffic({ slug: "demo" });
+    const row = rows.find((r) => r.path === "/verify");
+    expect(row).toBeDefined();
+    expect(row!.matchedRuleId).toBe("ok");
+    expect(row!.status).toBe(200);
+    expect(row!.reqHeaders.authorization).toBe("***"); // redacted, not stored raw
   });
 });

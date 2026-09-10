@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useDebounced } from "@/app/_lib/use-debounced";
 import { Button, Input, Select } from "@/app/_ui";
 import type { ProjectVM } from "@/src/viewer/model";
-import type { TrafficEntry } from "./sample-traffic";
+import type { TrafficEntry } from "./types";
 import { TrafficTable } from "./TrafficTable";
 import { TrafficDrawer } from "./TrafficDrawer";
 import styles from "./traffic.module.css";

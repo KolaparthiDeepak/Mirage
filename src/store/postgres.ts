@@ -1,6 +1,6 @@
 import postgres, { type Sql } from "postgres";
 import { loadMigrations } from "./migrate";
-import type { ProjectSummary, Store, StoredProject, StoredRule } from "./types";
+import type { ProjectSummary, Store, StoredProject, StoredRule, TrafficEntry, TrafficFilter } from "./types";
 
 // The stored types (StoredProject["defaults"], Rule, unknown openApiDoc) are
 // plain JSON-safe data, but postgres.js's JSONValue type structurally rejects
@@ -145,7 +145,96 @@ export class PostgresStore implements Store {
     return rows[0] ? Number(rows[0].config_version) : null;
   }
 
+  async recordTraffic(entry: TrafficEntry): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into traffic
+        (id, slug, at, method, path, query, req_headers, req_body, status,
+         res_headers, res_body, matched_rule_id, duration_ms, warnings,
+         client_hash, config_version, truncated)
+      values (
+        ${entry.id}, ${entry.slug}, ${entry.at}, ${entry.method}, ${entry.path},
+        ${this.sql.json(toJsonb(entry.query))}, ${this.sql.json(toJsonb(entry.reqHeaders))}, ${entry.reqBody}, ${entry.status},
+        ${this.sql.json(toJsonb(entry.resHeaders))}, ${entry.resBody}, ${entry.matchedRuleId}, ${entry.durationMs},
+        ${this.sql.json(toJsonb(entry.warnings))}, ${entry.clientHash}, ${entry.configVersion}, ${entry.truncated}
+      )
+    `;
+  }
+
+  async queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]> {
+    await this.ready;
+    const limit = filter.limit ?? 50;
+    const rows = await this.sql<PgTrafficRow[]>`
+      select * from traffic
+      where slug = ${filter.slug}
+        ${filter.before ? this.sql`and at < ${filter.before}` : this.sql``}
+        ${filter.unmatchedOnly === true ? this.sql`and matched_rule_id is null` : this.sql``}
+        ${filter.unmatchedOnly === false ? this.sql`and matched_rule_id is not null` : this.sql``}
+      order by at desc
+      limit ${limit}
+    `;
+    return rows.map(pgRowToTrafficEntry);
+  }
+
+  async pruneTraffic(before: Date, maxRowsPerProject: number): Promise<number> {
+    await this.ready;
+    return this.sql.begin(async (tx) => {
+      const byAge = await tx`delete from traffic where at < ${before.toISOString()}`;
+      // Beyond the row cap, per project: delete everything past the newest N rows.
+      const byCount = await tx`
+        delete from traffic t using (
+          select id, row_number() over (partition by slug order by at desc) as rn
+          from traffic
+        ) ranked
+        where t.id = ranked.id and ranked.rn > ${maxRowsPerProject}
+      `;
+      return byAge.count + byCount.count;
+    });
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }
+}
+
+interface PgTrafficRow {
+  id: string;
+  slug: string;
+  at: string;
+  method: string;
+  path: string;
+  query: Record<string, string>;
+  req_headers: Record<string, string>;
+  req_body: string | null;
+  status: number;
+  res_headers: Record<string, string>;
+  res_body: string | null;
+  matched_rule_id: string | null;
+  duration_ms: number;
+  warnings: string[];
+  client_hash: string | null;
+  config_version: number | null;
+  truncated: boolean;
+}
+
+function pgRowToTrafficEntry(row: PgTrafficRow): TrafficEntry {
+  return {
+    id: row.id,
+    slug: row.slug,
+    at: new Date(row.at).toISOString(),
+    method: row.method,
+    path: row.path,
+    query: row.query,
+    reqHeaders: row.req_headers,
+    reqBody: row.req_body,
+    status: row.status,
+    resHeaders: row.res_headers,
+    resBody: row.res_body,
+    matchedRuleId: row.matched_rule_id,
+    durationMs: row.duration_ms,
+    warnings: row.warnings,
+    clientHash: row.client_hash,
+    configVersion: row.config_version != null ? Number(row.config_version) : null,
+    truncated: row.truncated,
+  };
 }

@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { Drawer, Button, MethodPill, StatusCode, JsonView } from "@/app/_ui";
 import { caseHref, endpointHref } from "@/app/_lib/nav";
 import type { ProjectVM } from "@/src/viewer/model";
-import type { TrafficEntry } from "./sample-traffic";
+import type { TrafficEntry } from "./types";
 import styles from "./traffic.module.css";
 
 type Props = {

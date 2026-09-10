@@ -6,7 +6,7 @@ import { caseHref } from "@/app/_lib/nav";
 import { TrafficTable } from "./TrafficTable";
 import { TrafficDrawer } from "./TrafficDrawer";
 import { TrafficView } from "./TrafficView";
-import type { TrafficEntry } from "./sample-traffic";
+import type { TrafficEntry } from "./types";
 import TrafficPage from "@/app/(app)/p/[slug]/traffic/page";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
@@ -149,13 +149,14 @@ describe("TrafficView", () => {
 });
 
 describe("Traffic page", () => {
-  it("renders a Preview badge and the traffic table", () => {
+  it("renders a Preview badge and the honest empty state until plan 05 wires it up (plan 04)", () => {
     render(
       <ViewModelProvider model={{ build: { commit: "x", builtAt: "", warnings: [] }, projects: [project] } as never}>
         <TrafficPage params={resolvedParams("demo")} />
       </ViewModelProvider>,
     );
     expect(screen.getByText("Preview")).toBeDefined();
-    expect(screen.getByRole("table")).toBeDefined();
+    expect(screen.getByText("No traffic")).toBeDefined();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 });
