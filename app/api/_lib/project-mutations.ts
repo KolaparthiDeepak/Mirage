@@ -28,6 +28,13 @@ export function checkNoSecretVarsInResponse(rule: Rule, project: StoredProject):
   return null;
 }
 
+/** Plan 15: attribution. The admin token is a single shared secret with no
+ *  user behind it — record that honestly rather than inventing an identity.
+ *  Takes the request so it can carry a token name once plan 14 gives us one. */
+export function actorFromRequest(req?: Request): string {
+  return req?.headers.get("x-mirage-actor") || "admin-token";
+}
+
 export function requireStoreManaged(project: StoredProject): Response | null {
   if (project.source === "repo") {
     return Response.json(

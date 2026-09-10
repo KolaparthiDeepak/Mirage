@@ -369,6 +369,41 @@ describe("projects write API (plan 03)", () => {
     expect((await store.getProject("secretread"))!.variables![0]!.value).toBe("sk-live-9");
   });
 
+  it("records history for every write and reverts a rule.create (plan 15)", async () => {
+    await seedProject("hist");
+    const rulesRoute = await import("./[slug]/rules/route");
+    const idRoute = await import("./[slug]/rules/[id]/route");
+    const historyRoute = await import("./[slug]/history/route");
+    const revertRoute = await import("./[slug]/history/[eventId]/revert/route");
+
+    await rulesRoute.POST(
+      new Request("https://x", { method: "POST", headers: AUTH, body: JSON.stringify({ id: "h1", request: { method: "GET", path: "/h1" }, response: { status: 200 } }) }),
+      ctx({ slug: "hist" }),
+    );
+    await idRoute.PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ id: "h1", request: { method: "GET", path: "/h1" }, response: { status: 201 } }) }),
+      ctx({ slug: "hist", id: "h1" }),
+    );
+
+    const histRes = await historyRoute.GET(new Request("https://x", { headers: AUTH }), ctx({ slug: "hist" }));
+    const { events } = await histRes.json();
+    expect(events.map((e: { kind: string }) => e.kind)).toEqual(["rule.update", "rule.create"]);
+
+    // revert the creation -> the rule is gone
+    const createEvent = events.find((e: { kind: string }) => e.kind === "rule.create");
+    // it changed since (h1 was PATCHed) -> conflict without force
+    const conflict = await revertRoute.POST(new Request("https://x", { method: "POST", headers: AUTH }), ctx({ slug: "hist", eventId: String(createEvent.id) }));
+    expect(conflict.status).toBe(409);
+
+    const forced = await revertRoute.POST(new Request("https://x?force=1", { method: "POST", headers: AUTH }), ctx({ slug: "hist", eventId: String(createEvent.id) }));
+    expect(forced.status).toBe(200);
+    expect((await store.getProject("hist"))!.rules).toHaveLength(0);
+
+    // the revert itself is a new event
+    const after = await (await historyRoute.GET(new Request("https://x", { headers: AUTH }), ctx({ slug: "hist" }))).json();
+    expect(after.events[0].kind).toBe("revert");
+  });
+
   it("PATCH /api/projects/:slug 409s on a stale ifVersion", async () => {
     const project = await seedProject("staleversion");
     const { PATCH } = await import("./[slug]/route");

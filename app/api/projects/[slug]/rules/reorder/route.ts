@@ -6,7 +6,7 @@
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../../../_lib/admin-auth";
-import { requireStoreManaged } from "../../../../_lib/project-mutations";
+import { actorFromRequest, requireStoreManaged } from "../../../../_lib/project-mutations";
 
 export async function POST(
   req: Request,
@@ -42,7 +42,17 @@ export async function POST(
 
   const byId = new Map(project.rules.map((r) => [r.ruleId, r]));
   const rules = (ruleIds as string[]).map((id, position) => ({ ...byId.get(id)!, position }));
-  await store.saveProject({ ...project, rules });
+  await store.saveProject(
+    { ...project, rules },
+    {
+      slug,
+      actor: actorFromRequest(req),
+      kind: "rule.reorder",
+      targetId: null,
+      before: [...project.rules].sort((a, b) => a.position - b.position).map((r) => r.ruleId),
+      after: ruleIds,
+    },
+  );
   invalidateConfig(slug);
   return Response.json({ ok: true });
 }

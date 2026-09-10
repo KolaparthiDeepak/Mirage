@@ -1,6 +1,41 @@
 import postgres, { type Sql } from "postgres";
 import { loadMigrations } from "./migrate";
-import type { ProjectSummary, Store, StoredProject, StoredRule, TrafficEntry, TrafficFilter } from "./types";
+import type {
+  ConfigEvent,
+  ConfigEventInput,
+  ProjectSummary,
+  Store,
+  StoredProject,
+  StoredRule,
+  TrafficEntry,
+  TrafficFilter,
+} from "./types";
+
+interface PgEventRow {
+  id: number;
+  slug: string;
+  at: string;
+  actor: string | null;
+  kind: ConfigEvent["kind"];
+  target_id: string | null;
+  before: unknown | null;
+  after: unknown | null;
+  version: number;
+}
+
+function pgRowToEvent(r: PgEventRow): ConfigEvent {
+  return {
+    id: Number(r.id),
+    slug: r.slug,
+    at: new Date(r.at).toISOString(),
+    actor: r.actor,
+    kind: r.kind,
+    targetId: r.target_id,
+    before: r.before ?? null,
+    after: r.after ?? null,
+    version: Number(r.version),
+  };
+}
 
 // The stored types (StoredProject["defaults"], Rule, unknown openApiDoc) are
 // plain JSON-safe data, but postgres.js's JSONValue type structurally rejects
@@ -109,7 +144,7 @@ export class PostgresStore implements Store {
     }));
   }
 
-  async saveProject(p: StoredProject): Promise<void> {
+  async saveProject(p: StoredProject, event?: ConfigEventInput): Promise<void> {
     await this.ready;
     await this.sql.begin(async (tx) => {
       const existing = await tx<{ config_version: number }[]>`
@@ -144,7 +179,50 @@ export class PostgresStore implements Store {
           values (${p.slug}, ${rule.ruleId}, ${rule.position}, ${tx.json(toJsonb(rule.definition))})
         `;
       }
+
+      if (event) {
+        await tx`
+          insert into config_event (slug, actor, kind, target_id, before, after, version)
+          values (
+            ${p.slug}, ${event.actor}, ${event.kind}, ${event.targetId},
+            ${event.before != null ? tx.json(toJsonb(event.before)) : null},
+            ${event.after != null ? tx.json(toJsonb(event.after)) : null},
+            ${nextVersion}
+          )
+        `;
+      }
     });
+  }
+
+  async listConfigEvents(
+    slug: string,
+    opts: { limit?: number; before?: string; targetId?: string } = {},
+  ): Promise<ConfigEvent[]> {
+    await this.ready;
+    const rows = await this.sql<PgEventRow[]>`
+      select * from config_event
+      where slug = ${slug}
+        ${opts.before ? this.sql`and at < ${opts.before}` : this.sql``}
+        ${opts.targetId ? this.sql`and target_id = ${opts.targetId}` : this.sql``}
+      order by at desc, id desc
+      limit ${opts.limit ?? 100}
+    `;
+    return rows.map(pgRowToEvent);
+  }
+
+  async getConfigEvent(slug: string, id: number): Promise<ConfigEvent | null> {
+    await this.ready;
+    const rows = await this.sql<PgEventRow[]>`select * from config_event where slug = ${slug} and id = ${id}`;
+    return rows[0] ? pgRowToEvent(rows[0]) : null;
+  }
+
+  async pruneConfigEvents(slug: string, keep: number, since: Date): Promise<number> {
+    await this.ready;
+    const res = await this.sql`
+      delete from config_event where slug = ${slug} and at < ${since.toISOString()}
+        and id not in (select id from config_event where slug = ${slug} order by at desc limit ${keep})
+    `;
+    return res.count;
   }
 
   async deleteProject(slug: string): Promise<void> {

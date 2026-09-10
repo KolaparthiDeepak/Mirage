@@ -127,6 +127,50 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect((await s.getProject(slug))?.contract).toEqual(contract);
     });
 
+    it("writes a config event in the same transaction as the save (plan 15)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("history");
+      await s.saveProject(project(slug), {
+        slug,
+        actor: "tester",
+        kind: "rule.create",
+        targetId: "r1",
+        before: null,
+        after: { id: "r1" },
+      });
+      await s.saveProject(project(slug, { name: "Renamed" }), {
+        slug,
+        actor: "tester",
+        kind: "project.update",
+        targetId: null,
+        before: { name: "Test Project" },
+        after: { name: "Renamed" },
+      });
+
+      const events = await s.listConfigEvents(slug);
+      expect(events.map((e) => e.kind)).toEqual(["project.update", "rule.create"]); // newest first
+      expect(events[0]!.version).toBe(2);
+      expect(events[1]!.after).toEqual({ id: "r1" });
+      expect(events[1]!.actor).toBe("tester");
+
+      const byRule = await s.listConfigEvents(slug, { targetId: "r1" });
+      expect(byRule).toHaveLength(1);
+
+      const one = await s.getConfigEvent(slug, events[0]!.id);
+      expect(one?.kind).toBe("project.update");
+    });
+
+    it("pruneConfigEvents keeps the newest `keep` regardless of age (plan 15)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("history-prune");
+      for (let i = 0; i < 5; i++) {
+        await s.saveProject(project(slug), { slug, actor: "t", kind: "rule.create", targetId: `r${i}`, before: null, after: {} });
+      }
+      const deleted = await s.pruneConfigEvents(slug, 2, new Date(Date.now() + 60_000));
+      expect(deleted).toBe(3);
+      expect(await s.listConfigEvents(slug)).toHaveLength(2);
+    });
+
     it("orders rules by position, independent of insertion order", async () => {
       const s = await get();
       const slug = uniqueSlug("order");

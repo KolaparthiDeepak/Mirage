@@ -1,6 +1,41 @@
 import Database from "better-sqlite3";
 import { loadMigrations } from "./migrate";
-import type { ProjectSummary, Store, StoredProject, StoredRule, TrafficEntry, TrafficFilter } from "./types";
+import type {
+  ConfigEvent,
+  ConfigEventInput,
+  ProjectSummary,
+  Store,
+  StoredProject,
+  StoredRule,
+  TrafficEntry,
+  TrafficFilter,
+} from "./types";
+
+interface SqliteEventRow {
+  id: number;
+  slug: string;
+  at: string;
+  actor: string | null;
+  kind: ConfigEvent["kind"];
+  target_id: string | null;
+  before: string | null;
+  after: string | null;
+  version: number;
+}
+
+function sqliteRowToEvent(r: SqliteEventRow): ConfigEvent {
+  return {
+    id: r.id,
+    slug: r.slug,
+    at: r.at,
+    actor: r.actor,
+    kind: r.kind,
+    targetId: r.target_id,
+    before: r.before ? JSON.parse(r.before) : null,
+    after: r.after ? JSON.parse(r.after) : null,
+    version: r.version,
+  };
+}
 
 interface ProjectRow {
   slug: string;
@@ -102,9 +137,9 @@ export class SqliteStore implements Store {
     }));
   }
 
-  async saveProject(p: StoredProject): Promise<void> {
+  async saveProject(p: StoredProject, event?: ConfigEventInput): Promise<void> {
     const now = new Date().toISOString();
-    const tx = this.db.transaction((project: StoredProject) => {
+    const tx = this.db.transaction((project: StoredProject, ev?: ConfigEventInput) => {
       const existing = this.db.prepare("select config_version from project where slug = ?").get(project.slug) as
         | { config_version: number }
         | undefined;
@@ -146,8 +181,56 @@ export class SqliteStore implements Store {
       for (const rule of project.rules) {
         insertRule.run(project.slug, rule.ruleId, rule.position, JSON.stringify(rule.definition));
       }
+
+      if (ev) {
+        this.db
+          .prepare(
+            `insert into config_event (slug, actor, kind, target_id, before, after, version)
+             values (?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            project.slug,
+            ev.actor,
+            ev.kind,
+            ev.targetId,
+            ev.before != null ? JSON.stringify(ev.before) : null,
+            ev.after != null ? JSON.stringify(ev.after) : null,
+            nextVersion,
+          );
+      }
     });
-    tx(p);
+    tx(p, event);
+  }
+
+  async listConfigEvents(
+    slug: string,
+    opts: { limit?: number; before?: string; targetId?: string } = {},
+  ): Promise<ConfigEvent[]> {
+    const clauses = ["slug = @slug"];
+    const params: Record<string, unknown> = { slug, limit: opts.limit ?? 100 };
+    if (opts.before) { clauses.push("at < @before"); params.before = opts.before; }
+    if (opts.targetId) { clauses.push("target_id = @targetId"); params.targetId = opts.targetId; }
+    const rows = this.db
+      .prepare(`select * from config_event where ${clauses.join(" and ")} order by at desc, id desc limit @limit`)
+      .all(params) as SqliteEventRow[];
+    return rows.map(sqliteRowToEvent);
+  }
+
+  async getConfigEvent(slug: string, id: number): Promise<ConfigEvent | null> {
+    const row = this.db.prepare("select * from config_event where slug = ? and id = ?").get(slug, id) as
+      | SqliteEventRow
+      | undefined;
+    return row ? sqliteRowToEvent(row) : null;
+  }
+
+  async pruneConfigEvents(slug: string, keep: number, since: Date): Promise<number> {
+    return this.db
+      .prepare(
+        `delete from config_event where slug = @slug and at < @since and id not in (
+           select id from config_event where slug = @slug order by at desc limit @keep
+         )`,
+      )
+      .run({ slug, since: since.toISOString(), keep }).changes;
   }
 
   async deleteProject(slug: string): Promise<void> {

@@ -78,6 +78,23 @@ export interface TrafficEntry {
   direction: "inbound" | "outbound";
 }
 
+/** Plan 15 — one append-only history row. `before`/`after` hold the rule
+ *  definition (or the project meta) as it was / became. */
+export interface ConfigEvent {
+  id: number;
+  slug: string;
+  at: string; // ISO-8601
+  actor: string | null;
+  kind: "project.update" | "rule.create" | "rule.update" | "rule.delete" | "rule.reorder" | "import" | "revert";
+  targetId: string | null;
+  before: unknown | null;
+  after: unknown | null;
+  version: number;
+}
+
+/** The parts a caller supplies; id/at/version are set by the store. */
+export type ConfigEventInput = Omit<ConfigEvent, "id" | "at" | "version">;
+
 export interface TrafficFilter {
   slug: string;
   /** Exact id — for the detail view and the match-trace endpoint (plan 06). */
@@ -114,10 +131,16 @@ export interface Store {
   getProject(slug: string): Promise<StoredProject | null>;
   listProjects(): Promise<ProjectSummary[]>;
   /** Upserts the project row and replaces its full rule set atomically —
-   *  simplest correct primitive for now. Plan 03's incremental per-rule
-   *  endpoints (create/update/delete one rule, reorder) can be added when that
-   *  plan is actually built, without changing this method's contract. */
-  saveProject(p: StoredProject): Promise<void>;
+   *  simplest correct primitive for now. Plan 15: pass `event` to write a
+   *  history row in the SAME transaction — a change with no event is a change
+   *  nobody can undo, so this is part of the contract, not fire-and-forget. */
+  saveProject(p: StoredProject, event?: ConfigEventInput): Promise<void>;
+  /** Plan 15: reverse-chronological history for a project. */
+  listConfigEvents(slug: string, opts?: { limit?: number; before?: string; targetId?: string }): Promise<ConfigEvent[]>;
+  getConfigEvent(slug: string, id: number): Promise<ConfigEvent | null>;
+  /** Retention: keep the newest `keep` per project OR everything since
+   *  `since`, whichever is larger. Returns rows deleted. */
+  pruneConfigEvents(slug: string, keep: number, since: Date): Promise<number>;
   deleteProject(slug: string): Promise<void>;
   getConfigVersion(slug: string): Promise<number | null>;
 

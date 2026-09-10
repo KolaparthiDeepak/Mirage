@@ -27,6 +27,9 @@ function fakeStore(getProject: Store["getProject"]): Store {
     bumpCounter: async () => 1,
     resetCounters: async () => 0,
     pruneCounters: async () => 0,
+    listConfigEvents: async () => [],
+    getConfigEvent: async () => null,
+    pruneConfigEvents: async () => 0,
     close: async () => {},
   };
 }

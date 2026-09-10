@@ -5,7 +5,7 @@ import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../../../_lib/admin-auth";
-import { checkNoSecretVarsInResponse, checkVersion, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../../_lib/project-mutations";
+import { actorFromRequest, checkNoSecretVarsInResponse, checkVersion, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../../_lib/project-mutations";
 
 export async function PATCH(
   req: Request,
@@ -61,7 +61,10 @@ export async function PATCH(
   }
 
   const rules = project.rules.map((r) => (r.ruleId === id ? { ...r, definition: rule } : r));
-  await store.saveProject({ ...project, rules });
+  await store.saveProject(
+    { ...project, rules },
+    { slug, actor: actorFromRequest(req), kind: "rule.update", targetId: id, before: existing.definition, after: rule },
+  );
   invalidateConfig(slug);
 
   const warning = detectShadowWarning(rules, id);
@@ -85,8 +88,12 @@ export async function DELETE(
   if (!project.rules.some((r) => r.ruleId === id)) {
     return Response.json({ error: "unknown rule", id }, { status: 404 });
   }
+  const removed = project.rules.find((r) => r.ruleId === id)!;
   const rules = project.rules.filter((r) => r.ruleId !== id);
-  await store.saveProject({ ...project, rules });
+  await store.saveProject(
+    { ...project, rules },
+    { slug, actor: actorFromRequest(req), kind: "rule.delete", targetId: id, before: { ...removed.definition, position: removed.position }, after: null },
+  );
   invalidateConfig(slug);
   return new Response(null, { status: 204 });
 }

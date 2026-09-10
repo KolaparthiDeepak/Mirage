@@ -3,8 +3,11 @@
 import { compileStoredProject } from "@/src/store/config-cache";
 import { computeCoverage } from "@/src/contract/coverage";
 import { getRuntimeStore } from "@/src/store/runtime-source";
+import { checkAdminAuth } from "../../../_lib/admin-auth";
 
-export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }): Promise<Response> {
+export async function GET(req: Request, ctx: { params: Promise<{ slug: string }> }): Promise<Response> {
+  const authError = checkAdminAuth(req);
+  if (authError) return authError;
   const { slug } = await ctx.params;
   const store = await getRuntimeStore();
   const project = await store.getProject(slug);

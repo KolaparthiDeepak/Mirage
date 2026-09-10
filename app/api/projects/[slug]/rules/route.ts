@@ -5,7 +5,7 @@ import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../../_lib/admin-auth";
-import { checkNoSecretVarsInResponse, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../_lib/project-mutations";
+import { actorFromRequest, checkNoSecretVarsInResponse, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../_lib/project-mutations";
 
 export async function POST(
   req: Request,
@@ -59,7 +59,10 @@ export async function POST(
 
   const position = project.rules.length > 0 ? Math.max(...project.rules.map((r) => r.position)) + 1 : 0;
   const rules = [...project.rules, { ruleId: rule.id, position, definition: rule }];
-  await store.saveProject({ ...project, rules });
+  await store.saveProject(
+    { ...project, rules },
+    { slug, actor: actorFromRequest(req), kind: "rule.create", targetId: rule.id, before: null, after: rule },
+  );
   invalidateConfig(slug);
 
   const warning = detectShadowWarning(rules, rule.id);

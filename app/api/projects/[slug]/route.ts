@@ -8,7 +8,7 @@ import { getRuntimeStore } from "@/src/store/runtime-source";
 import type { StoredProject } from "@/src/store/types";
 import { z } from "zod";
 import { checkAdminAuth } from "../../_lib/admin-auth";
-import { checkVersion, requireStoreManaged } from "../../_lib/project-mutations";
+import { actorFromRequest, checkVersion, requireStoreManaged } from "../../_lib/project-mutations";
 
 /** Plan 17: a `secret` variable's value is write-only — never returned by a
  *  read API. Shown as "***". */
@@ -144,7 +144,20 @@ export async function PATCH(
     return Response.json({ error: `${issue.path.join(".") || "project"}: ${issue.message}` }, { status: 400 });
   }
 
-  await store.saveProject(merged);
+  const metaOf = (p: StoredProject) => ({
+    name: p.name, basePath: p.basePath, defaults: p.defaults,
+    upstream: p.upstream, faults: p.faults, contract: p.contract,
+    defaultEnvironment: p.defaultEnvironment,
+    variables: (p.variables ?? []).map((v) => (v.secret ? { ...v, value: "***" } : v)),
+  });
+  await store.saveProject(merged, {
+    slug,
+    actor: actorFromRequest(req),
+    kind: "project.update",
+    targetId: null,
+    before: metaOf(project),
+    after: metaOf(merged),
+  });
   invalidateConfig(slug);
   const saved = await store.getProject(slug);
   return Response.json(saved ? stripSecrets(saved) : saved);
