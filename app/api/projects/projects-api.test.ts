@@ -251,6 +251,38 @@ describe("projects write API (plan 03)", () => {
     expect(updated!.basePath).toBe("/api");
   });
 
+  it("PATCH /api/projects/:slug rejects an upstream URL pointing at a private address (plan 07)", async () => {
+    await seedProject("ssrf");
+    const { PATCH } = await import("./[slug]/route");
+    for (const url of ["https://169.254.169.254/latest/", "https://127.0.0.1/", "http://api.example.com"]) {
+      const res = await PATCH(
+        new Request("https://x", {
+          method: "PATCH",
+          headers: AUTH,
+          body: JSON.stringify({ upstream: { url, mode: "record" } }),
+        }),
+        ctx({ slug: "ssrf" }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect((await store.getProject("ssrf"))!.upstream).toBeUndefined();
+  });
+
+  it("PATCH /api/projects/:slug clears upstream when mode is off (plan 07)", async () => {
+    await seedProject("upoff");
+    const { PATCH } = await import("./[slug]/route");
+    const res = await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ upstream: { url: "https://api.example.com", mode: "off" } }),
+      }),
+      ctx({ slug: "upoff" }),
+    );
+    expect(res.status).toBe(200);
+    expect((await store.getProject("upoff"))!.upstream).toBeUndefined();
+  });
+
   it("PATCH /api/projects/:slug 409s on a stale ifVersion", async () => {
     const project = await seedProject("staleversion");
     const { PATCH } = await import("./[slug]/route");

@@ -1,5 +1,5 @@
 import type { Rule } from "../compile/schema";
-import type { MockResponse } from "../engine/types";
+import type { MockResponse, UpstreamConfig } from "../engine/types";
 
 /** Project metadata as stored — everything compileMocks() would read from
  *  project.yaml, plus the bookkeeping fields the store adds. */
@@ -12,6 +12,8 @@ export interface StoredProjectMeta {
   /** "repo": mirrored from mocks/**, read-only in the UI, one writer (sync-cli).
    *  "store": created and edited directly. See plan 02 and plan 03. */
   source: "repo" | "store";
+  /** Plan 07. Absent means "no upstream" — same as `{ mode: "off" }`. */
+  upstream?: UpstreamConfig;
   configVersion: number;
   updatedAt: string; // ISO-8601
 }
@@ -62,6 +64,8 @@ export interface TrafficEntry {
   clientHash: string | null;
   configVersion: number | null;
   truncated: boolean;
+  /** Plan 07: this exchange was served by the project's upstream, not a rule. */
+  viaUpstream: boolean;
 }
 
 export interface TrafficFilter {
@@ -79,6 +83,8 @@ export interface TrafficFilter {
   /** true: only unmatched rows (the plan 05 "unmatched inbox"); false: only
    *  matched; omitted: both. */
   unmatchedOnly?: boolean;
+  /** Plan 07 "Recordings" view: only rows served by the upstream. */
+  viaUpstreamOnly?: boolean;
   method?: string;
   ruleId?: string;
   /** Case-sensitive substring match on `path`. */

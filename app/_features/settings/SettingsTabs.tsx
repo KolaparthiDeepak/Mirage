@@ -6,6 +6,7 @@ import type { ProjectVM } from "@/src/viewer/model";
 import type { ProjectConfigLite } from "@/app/_lib/project-config-context";
 import { GeneralTab } from "./GeneralTab";
 import { ServerTab } from "./ServerTab";
+import { UpstreamTab } from "./UpstreamTab";
 import { ImportExportTab } from "./ImportExportTab";
 import { DangerZoneTab } from "./DangerZoneTab";
 import styles from "./settings.module.css";
@@ -14,6 +15,7 @@ const TABS = [
   { id: "general", label: "General" },
   { id: "access", label: "Access" },
   { id: "server", label: "Server" },
+  { id: "upstream", label: "Upstream" },
   { id: "import-export", label: "Import / Export" },
   { id: "danger", label: "Danger Zone" },
 ];
@@ -59,6 +61,7 @@ export function SettingsTabs({
         {active === "server" && (
           <ServerTab slug={slug} project={project} config={config} />
         )}
+        {active === "upstream" && <UpstreamTab slug={slug} config={config} />}
         {active === "import-export" && <ImportExportTab project={project} />}
         {active === "danger" && <DangerZoneTab slug={slug} />}
       </div>

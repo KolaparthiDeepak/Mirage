@@ -39,6 +39,19 @@ export interface Route {
   response: MockResponse;
 }
 
+/** Plan 07. Passive data on ProjectConfig: `resolve()` never reads it — the
+ *  proxy fallback is decided in the mock route, strictly *after* resolve()
+ *  returns notFound, so turning it on can never change a matched request. */
+export interface UpstreamConfig {
+  /** Validated `https://` URL with a public hostname (src/proxy/ssrf.ts). */
+  url: string;
+  mode: "off" | "record" | "passthrough";
+  /** Forward the caller's Authorization header to the upstream. Default false. */
+  forwardAuth: boolean;
+  /** Hard-capped at 5000 by the forwarder regardless of this value. */
+  timeoutMs: number;
+}
+
 export interface ProjectConfig {
   name: string;
   slug: string;
@@ -50,6 +63,7 @@ export interface ProjectConfig {
   };
   routes: Route[];
   openApiDoc?: unknown;                  // merged OpenAPI, if any
+  upstream?: UpstreamConfig;             // plan 07 — absent means "off"
 }
 
 export interface ResolveResult {

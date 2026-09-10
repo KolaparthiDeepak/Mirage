@@ -11,10 +11,26 @@ const mockResponseSchema = z
   })
   .strict();
 
+// Plan 07. `mode: off` (or omitting `upstream` entirely) is today's behaviour.
+// The URL is only shape-checked here — the DNS-resolution / private-range check
+// (src/proxy/ssrf.ts) is async and runs at save time and before every forward.
+export const upstreamSchema = z
+  .object({
+    url: z
+      .string()
+      .url("upstream url must be a valid URL")
+      .startsWith("https://", "upstream url must be https://"),
+    mode: z.enum(["off", "record", "passthrough"]).default("off"),
+    forwardAuth: z.boolean().default(false),
+    timeoutMs: z.number().int().min(100).max(5000).default(5000),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
     slug: z.string().regex(slugRe, "slug must match ^[a-z0-9][a-z0-9-]{0,62}$"),
+    upstream: upstreamSchema.optional(),
     // "/" means "no base path": keeping it would make every generated OpenAPI
     // route fall outside the basePath test in compile.ts and be dropped.
     basePath: z

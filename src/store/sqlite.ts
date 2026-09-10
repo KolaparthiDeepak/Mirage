@@ -9,6 +9,7 @@ interface ProjectRow {
   defaults: string;
   openapi_doc: string | null;
   source: "repo" | "store";
+  upstream: string | null;
   config_version: number;
   updated_at: string;
 }
@@ -27,6 +28,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     defaults: JSON.parse(row.defaults) as StoredProject["defaults"],
     openApiDoc: row.openapi_doc ? JSON.parse(row.openapi_doc) : undefined,
     source: row.source,
+    upstream: row.upstream ? (JSON.parse(row.upstream) as StoredProject["upstream"]) : undefined,
     configVersion: row.config_version,
     updatedAt: row.updated_at,
     rules: rules
@@ -105,11 +107,11 @@ export class SqliteStore implements Store {
 
       this.db
         .prepare(
-          `insert into project (slug, name, base_path, defaults, openapi_doc, source, config_version, updated_at)
-           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @configVersion, @updatedAt)
+          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, config_version, updated_at)
+           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @configVersion, @updatedAt)
            on conflict(slug) do update set
              name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
-             openapi_doc = excluded.openapi_doc, source = excluded.source,
+             openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
              config_version = excluded.config_version, updated_at = excluded.updated_at`,
         )
         .run({
@@ -119,6 +121,7 @@ export class SqliteStore implements Store {
           defaults: JSON.stringify(project.defaults),
           openApiDoc: project.openApiDoc != null ? JSON.stringify(project.openApiDoc) : null,
           source: project.source,
+          upstream: project.upstream != null ? JSON.stringify(project.upstream) : null,
           configVersion: nextVersion,
           updatedAt: now,
         });
@@ -151,11 +154,11 @@ export class SqliteStore implements Store {
         `insert into traffic
            (id, slug, at, method, path, query, req_headers, req_body, status,
             res_headers, res_body, matched_rule_id, duration_ms, warnings,
-            client_hash, config_version, truncated)
+            client_hash, config_version, truncated, via_upstream)
          values
            (@id, @slug, @at, @method, @path, @query, @reqHeaders, @reqBody, @status,
             @resHeaders, @resBody, @matchedRuleId, @durationMs, @warnings,
-            @clientHash, @configVersion, @truncated)`,
+            @clientHash, @configVersion, @truncated, @viaUpstream)`,
       )
       .run({
         id: entry.id,
@@ -175,6 +178,7 @@ export class SqliteStore implements Store {
         clientHash: entry.clientHash,
         configVersion: entry.configVersion,
         truncated: entry.truncated ? 1 : 0,
+        viaUpstream: entry.viaUpstream ? 1 : 0,
       });
   }
 
@@ -187,6 +191,7 @@ export class SqliteStore implements Store {
     if (filter.since) { clauses.push("at > @since"); params.since = filter.since; }
     if (filter.unmatchedOnly === true) clauses.push("matched_rule_id is null");
     else if (filter.unmatchedOnly === false) clauses.push("matched_rule_id is not null");
+    if (filter.viaUpstreamOnly === true) clauses.push("via_upstream = 1");
     if (filter.method) { clauses.push("method = @method"); params.method = filter.method; }
     if (filter.ruleId) { clauses.push("matched_rule_id = @ruleId"); params.ruleId = filter.ruleId; }
     if (filter.pathContains) { clauses.push("path like @pathContains"); params.pathContains = `%${filter.pathContains}%`; }
@@ -245,6 +250,7 @@ interface SqliteTrafficRow {
   client_hash: string | null;
   config_version: number | null;
   truncated: number;
+  via_upstream: number;
 }
 
 function sqliteRowToTrafficEntry(row: SqliteTrafficRow): TrafficEntry {
@@ -266,5 +272,6 @@ function sqliteRowToTrafficEntry(row: SqliteTrafficRow): TrafficEntry {
     clientHash: row.client_hash,
     configVersion: row.config_version,
     truncated: row.truncated === 1,
+    viaUpstream: row.via_upstream === 1,
   };
 }

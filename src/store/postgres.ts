@@ -20,6 +20,7 @@ interface ProjectRow {
   defaults: StoredProject["defaults"];
   openapi_doc: unknown;
   source: "repo" | "store";
+  upstream: StoredProject["upstream"] | null;
   config_version: number;
   updated_at: string;
 }
@@ -38,6 +39,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     defaults: row.defaults,
     openApiDoc: row.openapi_doc ?? undefined,
     source: row.source,
+    upstream: row.upstream ?? undefined,
     configVersion: Number(row.config_version),
     updatedAt: new Date(row.updated_at).toISOString(),
     rules: [...rules]
@@ -111,14 +113,15 @@ export class PostgresStore implements Store {
       const nextVersion = (existing[0] ? Number(existing[0].config_version) : 0) + 1;
 
       await tx`
-        insert into project (slug, name, base_path, defaults, openapi_doc, source, config_version, updated_at)
+        insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, config_version, updated_at)
         values (
           ${p.slug}, ${p.name}, ${p.basePath ?? null}, ${tx.json(toJsonb(p.defaults))},
-          ${p.openApiDoc != null ? tx.json(toJsonb(p.openApiDoc)) : null}, ${p.source}, ${nextVersion}, now()
+          ${p.openApiDoc != null ? tx.json(toJsonb(p.openApiDoc)) : null}, ${p.source},
+          ${p.upstream != null ? tx.json(toJsonb(p.upstream)) : null}, ${nextVersion}, now()
         )
         on conflict (slug) do update set
           name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
-          openapi_doc = excluded.openapi_doc, source = excluded.source,
+          openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
           config_version = excluded.config_version, updated_at = excluded.updated_at
       `;
 
@@ -151,12 +154,12 @@ export class PostgresStore implements Store {
       insert into traffic
         (id, slug, at, method, path, query, req_headers, req_body, status,
          res_headers, res_body, matched_rule_id, duration_ms, warnings,
-         client_hash, config_version, truncated)
+         client_hash, config_version, truncated, via_upstream)
       values (
         ${entry.id}, ${entry.slug}, ${entry.at}, ${entry.method}, ${entry.path},
         ${this.sql.json(toJsonb(entry.query))}, ${this.sql.json(toJsonb(entry.reqHeaders))}, ${entry.reqBody}, ${entry.status},
         ${this.sql.json(toJsonb(entry.resHeaders))}, ${entry.resBody}, ${entry.matchedRuleId}, ${entry.durationMs},
-        ${this.sql.json(toJsonb(entry.warnings))}, ${entry.clientHash}, ${entry.configVersion}, ${entry.truncated}
+        ${this.sql.json(toJsonb(entry.warnings))}, ${entry.clientHash}, ${entry.configVersion}, ${entry.truncated}, ${entry.viaUpstream}
       )
     `;
   }
@@ -175,6 +178,7 @@ export class PostgresStore implements Store {
         ${filter.since ? this.sql`and at > ${filter.since}` : this.sql``}
         ${filter.unmatchedOnly === true ? this.sql`and matched_rule_id is null` : this.sql``}
         ${filter.unmatchedOnly === false ? this.sql`and matched_rule_id is not null` : this.sql``}
+        ${filter.viaUpstreamOnly === true ? this.sql`and via_upstream = true` : this.sql``}
         ${filter.method ? this.sql`and method = ${filter.method}` : this.sql``}
         ${filter.ruleId ? this.sql`and matched_rule_id = ${filter.ruleId}` : this.sql``}
         ${filter.pathContains ? this.sql`and path like ${"%" + filter.pathContains + "%"}` : this.sql``}
@@ -225,6 +229,7 @@ interface PgTrafficRow {
   client_hash: string | null;
   config_version: number | null;
   truncated: boolean;
+  via_upstream: boolean;
 }
 
 function pgRowToTrafficEntry(row: PgTrafficRow): TrafficEntry {
@@ -246,5 +251,6 @@ function pgRowToTrafficEntry(row: PgTrafficRow): TrafficEntry {
     clientHash: row.client_hash,
     configVersion: row.config_version != null ? Number(row.config_version) : null,
     truncated: row.truncated,
+    viaUpstream: row.via_upstream,
   };
 }

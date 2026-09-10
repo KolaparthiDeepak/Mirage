@@ -26,6 +26,7 @@ function entry(over: Partial<TrafficEntry> = {}): TrafficEntry {
     clientHash: null,
     configVersion: 1,
     truncated: false,
+    viaUpstream: false,
     ...over,
   };
 }

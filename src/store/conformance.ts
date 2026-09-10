@@ -73,6 +73,26 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(await s.getProject("conf-does-not-exist-xyz")).toBeNull();
     });
 
+    it("round-trips the upstream config (plan 07), and undefined when unset", async () => {
+      const s = await get();
+      const withUpstream = uniqueSlug("upstream-on");
+      await s.saveProject(
+        project(withUpstream, {
+          upstream: { url: "https://api.example.com", mode: "record", forwardAuth: false, timeoutMs: 5000 },
+        }),
+      );
+      expect((await s.getProject(withUpstream))?.upstream).toEqual({
+        url: "https://api.example.com",
+        mode: "record",
+        forwardAuth: false,
+        timeoutMs: 5000,
+      });
+
+      const without = uniqueSlug("upstream-off");
+      await s.saveProject(project(without));
+      expect((await s.getProject(without))?.upstream).toBeUndefined();
+    });
+
     it("orders rules by position, independent of insertion order", async () => {
       const s = await get();
       const slug = uniqueSlug("order");
@@ -239,6 +259,18 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(rows.map((r) => r.id)).toEqual([b.id, c.id]); // oldest first, unlike the default newest-first order
     });
 
+    it("filters to viaUpstream rows for the Recordings view (plan 07)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-via-upstream");
+      const mocked = trafficEntry(slug, { at: "2026-06-01T00:00:00.000Z" });
+      const proxied = trafficEntry(slug, { at: "2026-06-01T00:00:01.000Z", matchedRuleId: null, viaUpstream: true });
+      await s.recordTraffic(mocked);
+      await s.recordTraffic(proxied);
+
+      const rows = await s.queryTraffic({ slug, viaUpstreamOnly: true });
+      expect(rows.map((r) => r.id)).toEqual([proxied.id]);
+    });
+
     it("round-trips redacted-looking bodies, query params and warnings untouched", async () => {
       const s = await get();
       const slug = uniqueSlug("traffic-shape");
@@ -304,6 +336,7 @@ function trafficEntry(slug: string, overrides: Partial<TrafficEntry> = {}): Traf
     clientHash: null,
     configVersion: 1,
     truncated: false,
+    viaUpstream: false,
     ...overrides,
   };
 }

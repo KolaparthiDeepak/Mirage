@@ -29,6 +29,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         basePath: p.basePath,
         defaults: { delayMs: p.defaults.delayMs, cors: p.defaults.cors },
         hasOpenApi: p.openApiDoc != null,
+        upstream: p.upstream,
       },
     ]),
   );

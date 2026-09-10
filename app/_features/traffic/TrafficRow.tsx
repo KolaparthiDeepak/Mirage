@@ -38,7 +38,13 @@ export function TrafficRow({ entry, selected, tabbable = selected, onSelect }: P
       <td data-label="Status">
         <StatusCode code={entry.status} />
       </td>
-      <td data-label="Rule">{entry.matchedRuleId ?? <span className={styles.muted}>unmatched</span>}</td>
+      <td data-label="Rule">
+        {entry.viaUpstream ? (
+          <span className={styles.upstreamTag}>upstream</span>
+        ) : (
+          entry.matchedRuleId ?? <span className={styles.muted}>unmatched</span>
+        )}
+      </td>
       <td className={`${styles.muted} ${styles.tabular}`} data-label="Time">
         {new Date(entry.at).toLocaleTimeString()}
       </td>

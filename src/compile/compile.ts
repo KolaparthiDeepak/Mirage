@@ -284,6 +284,8 @@ export async function compileMocks(
       },
       routes,
       openApiDoc: mergedDoc,
+      // Plan 07: carried through from project.yaml; resolve() never reads it.
+      upstream: project.upstream,
     };
   }
 

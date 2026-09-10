@@ -1,11 +1,14 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
+import type { UpstreamConfig } from "@/src/engine/types";
 
 export interface ProjectConfigLite {
   name: string;
   basePath?: string;
   defaults: { delayMs: number; cors: boolean };
   hasOpenApi: boolean;
+  /** Plan 07 — the project's proxy config, if any. */
+  upstream?: UpstreamConfig;
 }
 
 const Ctx = createContext<Record<string, ProjectConfigLite> | null>(null);

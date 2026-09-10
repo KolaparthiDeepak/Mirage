@@ -2,11 +2,22 @@ import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { parseRequest } from "@/src/engine/request";
 import { resolve } from "@/src/engine/resolve";
+import type { UpstreamConfig } from "@/src/engine/types";
+import { proxyUnmatchedRequest } from "@/src/proxy";
 import { clientHash, clientIp } from "@/src/store/client-hash";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
 import { shouldRecord, truncateBody } from "@/src/store/traffic-limits";
 import type { TrafficEntry } from "@/src/store/types";
+
+// Plan 07: absent, "off", or the global kill switch → today's behaviour exactly.
+function upstreamActive(upstream: UpstreamConfig | undefined): upstream is UpstreamConfig {
+  return (
+    process.env.MIRAGE_UPSTREAM !== "off" &&
+    upstream != null &&
+    (upstream.mode === "record" || upstream.mode === "passthrough")
+  );
+}
 
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -60,6 +71,67 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
 
   const parsed = await parseRequest(req, subPath);
   const result = resolve(parsed, project);
+
+  // Plan 07: the proxy is strictly a fallback for what the mock does not know.
+  // Only an *unmatched* request can reach it, so turning it on can never change
+  // a matched rule's behaviour.
+  if (result.matchedRuleId === null && upstreamActive(project.upstream)) {
+    let search = "";
+    try { search = new URL(req.url).search; } catch { /* keep "" */ }
+
+    const outcome = await proxyUnmatchedRequest({
+      slug,
+      upstream: project.upstream,
+      method: req.method,
+      subPath,
+      search,
+      reqHeaders: parsed.headers,
+      reqBody: parsed.rawBody || null,
+    });
+
+    if ("rateLimited" in outcome) {
+      return json(429, { error: "upstream rate limit exceeded for this project", slug }, cors);
+    }
+
+    const resHeaders: Record<string, string> = { ...outcome.response.headers, ...cors, "x-mock-matched": "false" };
+    const rec = outcome.record;
+    if (rec && shouldRecord(slug, rec.status, false)) {
+      try {
+        const reqBody = truncateBody(redactBody(parsed.rawBody || null));
+        const resBody = truncateBody(redactBody(rec.bodyText));
+        after(() =>
+          recordTrafficEntry({
+            id: randomUUID(),
+            slug,
+            at: new Date(startedAt).toISOString(),
+            method: req.method,
+            path: subPath,
+            query: parsed.query,
+            reqHeaders: redactHeaders(parsed.headers),
+            reqBody: reqBody.body,
+            status: rec.status,
+            resHeaders: redactHeaders(resHeaders),
+            resBody: resBody.body,
+            matchedRuleId: null,
+            durationMs: Date.now() - startedAt,
+            warnings: rec.error ? [`upstream ${rec.error}`] : [],
+            clientHash: clientHash(clientIp(req.headers)),
+            configVersion,
+            truncated: reqBody.truncated || resBody.truncated || rec.truncated,
+            viaUpstream: true,
+          }),
+        );
+      } catch (e) {
+        console.error(`[traffic] could not schedule upstream recording for "${slug}": ${(e as Error).message}`);
+      }
+    }
+
+    console.log(JSON.stringify({
+      t: new Date().toISOString(), proj: slug, m: req.method, path: subPath,
+      rule: null, status: outcome.response.status, matched: false, upstream: true,
+    }));
+    return new Response(outcome.response.bodyText, { status: outcome.response.status, headers: resHeaders });
+  }
 
   if (result.delayMs > 0) {
     await new Promise((r) => setTimeout(r, Math.min(result.delayMs, 9000)));
@@ -134,6 +206,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
           clientHash: clientHash(clientIp(req.headers)),
           configVersion,
           truncated: reqBody.truncated || resBody.truncated,
+          viaUpstream: false,
         }),
       );
     } catch (e) {
