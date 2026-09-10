@@ -2,9 +2,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { compileSegments } from "../engine/match";
+import { compileSegments, methodSubsumes, segmentsSubsume } from "../engine/match";
 import { parseTemplate, TemplateError } from "../engine/template";
-import type { MockResponse, ProjectConfig, Route, Segment } from "../engine/types";
+import type { MockResponse, ProjectConfig, Route } from "../engine/types";
 import { expandOpenApi } from "../openapi/expand";
 import { projectYamlSchema, ruleFileSchema, type Rule } from "./schema";
 
@@ -114,30 +114,6 @@ export function toRoute(rule: Rule): Route {
     match: rule.request.match as Route["match"],
     response: rule.response,
   };
-}
-
-/** True when `earlier` matches every request `later` can match, so `later` is dead
- *  under first-match-wins. A literal subsumes only an identical literal; param and
- *  wildcard subsume any single segment; catchall subsumes the rest of the path. */
-function segmentsSubsume(earlier: Segment[], later: Segment[]): boolean {
-  for (let i = 0; i < earlier.length; i++) {
-    const e = earlier[i]!;
-    if (e.kind === "catchall") return true;
-    const l = later[i];
-    if (l === undefined) return false;
-    if (e.kind === "literal") {
-      if (l.kind !== "literal" || l.value !== e.value) return false;
-    } else if (l.kind === "catchall") {
-      // A single-segment earlier pattern cannot cover an unbounded tail.
-      return false;
-    }
-    // param / wildcard cover any single later segment
-  }
-  return later.length === earlier.length;
-}
-
-function methodSubsumes(earlier: string, later: string): boolean {
-  return earlier === "*" || earlier === later;
 }
 
 function detectDeadRules(routes: Route[], warnings: string[]): void {

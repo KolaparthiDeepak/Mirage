@@ -4,8 +4,10 @@ import type { MockResponse, ParsedRequest, ProjectConfig, ResolveResult } from "
 
 /** Returns the basePath-relative path, or null when the request is outside the
  *  basePath entirely. Returning the path unchanged (as this did) let a request
- *  that omitted the basePath match a basePath-relative route and get a 200. */
-function stripBasePath(path: string, basePath: string | undefined): string | null {
+ *  that omitted the basePath match a basePath-relative route and get a 200.
+ *  Exported for explain.ts (plan 06) — one implementation, not two that can
+ *  silently drift apart on exactly this kind of edge case. */
+export function stripBasePath(path: string, basePath: string | undefined): string | null {
   if (!basePath) return path;
   if (path === basePath) return "/";
   if (path.startsWith(basePath + "/")) return path.slice(basePath.length);

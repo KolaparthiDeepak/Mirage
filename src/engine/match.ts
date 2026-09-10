@@ -38,6 +38,32 @@ export function methodMatches(routeMethod: string, requestMethod: string): boole
   return routeMethod === "*" || routeMethod.toUpperCase() === requestMethod.toUpperCase();
 }
 
+/** True when `earlier` matches every request `later` can match, so `later` is dead
+ *  under first-match-wins. A literal subsumes only an identical literal; param and
+ *  wildcard subsume any single segment; catchall subsumes the rest of the path.
+ *  Shared by the compiler's dead-rule warning (B10) and the match trace's
+ *  "unreachable rule below" hint (plan 06) — one definition of "shadows". */
+export function segmentsSubsume(earlier: Segment[], later: Segment[]): boolean {
+  for (let i = 0; i < earlier.length; i++) {
+    const e = earlier[i]!;
+    if (e.kind === "catchall") return true;
+    const l = later[i];
+    if (l === undefined) return false;
+    if (e.kind === "literal") {
+      if (l.kind !== "literal" || l.value !== e.value) return false;
+    } else if (l.kind === "catchall") {
+      // A single-segment earlier pattern cannot cover an unbounded tail.
+      return false;
+    }
+    // param / wildcard cover any single later segment
+  }
+  return later.length === earlier.length;
+}
+
+export function methodSubsumes(earlier: string, later: string): boolean {
+  return earlier === "*" || earlier === later;
+}
+
 /** Property names that would read off the prototype chain rather than the request. */
 export const FORBIDDEN_PATH_TOKENS = new Set(["__proto__", "constructor", "prototype"]);
 
