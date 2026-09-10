@@ -106,6 +106,19 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect((await s.getProject(slug))?.faults).toEqual(faults);
     });
 
+    it("round-trips variables and the default environment (plan 17)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("vars");
+      const variables = [
+        { key: "merchantName", value: "Acme", scope: "project" as const },
+        { key: "riskScore", value: 12, scope: "project" as const, overrides: { staging: 85 } },
+      ];
+      await s.saveProject(project(slug, { variables, defaultEnvironment: "prod" }));
+      const back = await s.getProject(slug);
+      expect(back?.variables).toEqual(variables);
+      expect(back?.defaultEnvironment).toBe("prod");
+    });
+
     it("orders rules by position, independent of insertion order", async () => {
       const s = await get();
       const slug = uniqueSlug("order");

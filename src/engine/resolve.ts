@@ -1,6 +1,9 @@
 import { allMatch, matchPath, methodMatches } from "./match";
 import { renderDeep, renderTemplate, type TemplateContext } from "./template";
+import { resolveVars } from "./vars";
 import type { MockResponse, ParsedRequest, ProjectConfig, ResolveResult } from "./types";
+
+const ENV_HEADER = "x-mirage-env";
 
 /** Returns the basePath-relative path, or null when the request is outside the
  *  basePath entirely. Returning the path unchanged (as this did) let a request
@@ -32,14 +35,20 @@ export function buildResponse(
   return { status: response.status, headers, body };
 }
 
+function envOf(req: ParsedRequest, project: ProjectConfig): string | undefined {
+  return req.headers[ENV_HEADER] || project.defaultEnvironment;
+}
+
 function notFound(req: ParsedRequest, project: ProjectConfig, warnings: string[]): ResolveResult {
-  const ctx: TemplateContext = { body: req.body, path: {}, query: req.query, header: req.headers };
+  const vars = resolveVars(project.variables, envOf(req, project));
+  const ctx: TemplateContext = { body: req.body, path: {}, query: req.query, header: req.headers, vars };
   const built = buildResponse(project.defaults.notFound, ctx, warnings);
   return { ...built, matchedRuleId: null, delayMs: project.defaults.delayMs, warnings };
 }
 
 export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResult {
   const warnings: string[] = [];
+  const vars = resolveVars(project.variables, envOf(req, project));
   const path = stripBasePath(req.path, project.basePath);
   if (path === null) return notFound(req, project, warnings);
 
@@ -49,7 +58,7 @@ export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResu
     if (!pm.matched) continue;
     if (!allMatch(route.match, req)) continue;
 
-    const ctx: TemplateContext = { body: req.body, path: pm.params, query: req.query, header: req.headers };
+    const ctx: TemplateContext = { body: req.body, path: pm.params, query: req.query, header: req.headers, vars };
     const built = buildResponse(route.response, ctx, warnings);
     return {
       ...built,

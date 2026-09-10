@@ -107,6 +107,8 @@ export interface ProjectConfig {
   openApiDoc?: unknown;                  // merged OpenAPI, if any
   upstream?: UpstreamConfig;             // plan 07 — absent means "off"
   faults?: FaultsConfig;                 // plan 11 — absent / enabled:false means "off"
+  variables?: ProjectVariable[];         // plan 17
+  defaultEnvironment?: string;           // plan 17 — used when x-mirage-env is absent
 }
 
 export interface ResolveResult {
@@ -129,4 +131,19 @@ export interface TemplateContext {
   path: Record<string, string>;
   query: Record<string, string>;
   header: Record<string, string>;
+  /** Plan 17: project variables resolved for the request's environment.
+   *  Absent → `{{vars.*}}` renders empty with a warning, like any missing token. */
+  vars?: Record<string, unknown>;
+}
+
+/** Plan 17. Variables belong to the project and are shared; `overrides` swap
+ *  the value per environment (selected by the `x-mirage-env` header). A
+ *  `secret` variable is never returned by a read API and is rejected at save
+ *  if referenced in a response body. */
+export interface ProjectVariable {
+  key: string;
+  value?: unknown;
+  scope: "project";
+  secret?: boolean;
+  overrides?: Record<string, unknown>;
 }

@@ -4,7 +4,7 @@ import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../../../_lib/admin-auth";
-import { checkVersion, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../../_lib/project-mutations";
+import { checkNoSecretVarsInResponse, checkVersion, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../../_lib/project-mutations";
 
 export async function PATCH(
   req: Request,
@@ -47,6 +47,8 @@ export async function PATCH(
       throw e;
     }
   }
+  const secretError = checkNoSecretVarsInResponse(rule, project);
+  if (secretError) return secretError;
   if (project.rules.some((r) => r.ruleId === rule.id && r !== existing)) {
     return Response.json({ error: `rule id "${rule.id}" collides with another rule` }, { status: 409 });
   }

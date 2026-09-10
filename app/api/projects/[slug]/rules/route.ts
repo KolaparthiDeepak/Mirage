@@ -4,7 +4,7 @@ import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../../_lib/admin-auth";
-import { detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../_lib/project-mutations";
+import { checkNoSecretVarsInResponse, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../_lib/project-mutations";
 
 export async function POST(
   req: Request,
@@ -41,6 +41,9 @@ export async function POST(
       throw e;
     }
   }
+
+  const secretError = checkNoSecretVarsInResponse(rule, project);
+  if (secretError) return secretError;
 
   if (project.rules.some((r) => r.ruleId === rule.id)) {
     return Response.json({ error: `rule id "${rule.id}" already exists in this project` }, { status: 409 });

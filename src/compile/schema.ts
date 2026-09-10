@@ -112,12 +112,26 @@ export const faultsSchema = z
   })
   .strict();
 
+// Plan 17 — project variables. `{{vars.key}}` resolves from these at request
+// time; `overrides` swap the value per environment.
+export const projectVariableSchema = z
+  .object({
+    key: z.string().regex(/^[A-Za-z0-9_-]+$/, "variable key must match ^[A-Za-z0-9_-]+$"),
+    value: z.unknown(),
+    scope: z.literal("project").default("project"),
+    secret: z.boolean().optional(),
+    overrides: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
     slug: z.string().regex(slugRe, "slug must match ^[a-z0-9][a-z0-9-]{0,62}$"),
     upstream: upstreamSchema.optional(),
     faults: faultsSchema.optional(),
+    variables: z.array(projectVariableSchema).optional(),
+    defaultEnvironment: z.string().min(1).optional(),
     // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
     // body. Default true; an existing project with examples throughout is
     // unaffected either way.

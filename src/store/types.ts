@@ -1,5 +1,5 @@
 import type { Rule } from "../compile/schema";
-import type { FaultsConfig, MockResponse, UpstreamConfig } from "../engine/types";
+import type { FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
 
 /** Project metadata as stored — everything compileMocks() would read from
  *  project.yaml, plus the bookkeeping fields the store adds. */
@@ -16,6 +16,9 @@ export interface StoredProjectMeta {
   upstream?: UpstreamConfig;
   /** Plan 11. Absent or `enabled:false` means "no faults". */
   faults?: FaultsConfig;
+  /** Plan 17. Shared project variables; `{{vars.key}}` resolves from these. */
+  variables?: ProjectVariable[];
+  defaultEnvironment?: string;
   configVersion: number;
   updatedAt: string; // ISO-8601
 }

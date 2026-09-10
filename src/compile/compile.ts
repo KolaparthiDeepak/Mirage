@@ -291,9 +291,11 @@ export async function compileMocks(
       },
       routes,
       openApiDoc: mergedDoc,
-      // Plan 07 / 11: carried through from project.yaml; resolve() never reads them.
+      // Plan 07 / 11 / 17: carried through from project.yaml.
       upstream: project.upstream,
       faults: project.faults,
+      variables: project.variables,
+      defaultEnvironment: project.defaultEnvironment,
     };
   }
 

@@ -283,6 +283,55 @@ describe("projects write API (plan 03)", () => {
     expect((await store.getProject("upoff"))!.upstream).toBeUndefined();
   });
 
+  it("rejects a rule whose response body references a secret variable (plan 17)", async () => {
+    await seedProject("secrets");
+    const projectRoute = await import("./[slug]/route");
+    await projectRoute.PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ variables: [{ key: "apiKey", value: "sk-live-1", scope: "project", secret: true }] }),
+      }),
+      ctx({ slug: "secrets" }),
+    );
+
+    const { POST } = await import("./[slug]/rules/route");
+    const res = await POST(
+      new Request("https://x", {
+        method: "POST",
+        headers: AUTH,
+        body: JSON.stringify({ id: "leak", request: { method: "GET", path: "/leak" }, response: { status: 200, body: { k: "{{vars.apiKey}}" } } }),
+      }),
+      ctx({ slug: "secrets" }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/secret variable "apiKey"/);
+  });
+
+  it("never returns a secret variable's value (plan 17)", async () => {
+    await seedProject("secretread");
+    const { PATCH } = await import("./[slug]/route");
+    const res = await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ variables: [{ key: "token", value: "sk-live-9", scope: "project", secret: true }] }),
+      }),
+      ctx({ slug: "secretread" }),
+    );
+    const returned = await res.json();
+    expect(returned.variables[0].value).toBe("***");
+    await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ variables: [{ key: "token", value: "***", scope: "project", secret: true }] }),
+      }),
+      ctx({ slug: "secretread" }),
+    );
+    expect((await store.getProject("secretread"))!.variables![0]!.value).toBe("sk-live-9");
+  });
+
   it("PATCH /api/projects/:slug 409s on a stale ifVersion", async () => {
     const project = await seedProject("staleversion");
     const { PATCH } = await import("./[slug]/route");
