@@ -85,7 +85,10 @@ function walkRuleFiles(dir: string): string[] {
 // compiled clean but 500s in production.
 const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
-function assertResponseValid(resp: MockResponse): void {
+// Exported so plan 03's save endpoints re-run the exact build-time checks
+// (header grammar, control characters, template tokens) rather than a second
+// implementation that could drift from what the build actually enforces.
+export function assertResponseValid(resp: MockResponse): void {
   const visit = (v: unknown): void => {
     if (typeof v === "string") parseTemplate(v);
     else if (Array.isArray(v)) v.forEach(visit);

@@ -1,0 +1,74 @@
+// Plan 03: PATCH /api/projects/:slug/rules/:id (full-definition replace,
+// position kept), DELETE /api/projects/:slug/rules/:id.
+import { invalidateConfig } from "@/src/store/config-cache";
+import { getRuntimeStore } from "@/src/store/runtime-source";
+import { checkAdminAuth } from "../../../../_lib/admin-auth";
+import { checkVersion, detectShadowWarning, requireStoreManaged, validateRuleDefinition } from "../../../../_lib/project-mutations";
+
+export async function PATCH(
+  req: Request,
+  ctx: { params: Promise<{ slug: string; id: string }> },
+): Promise<Response> {
+  const authError = checkAdminAuth(req);
+  if (authError) return authError;
+  const { slug, id } = await ctx.params;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "request body must be JSON" }, { status: 400 });
+  }
+  const ifVersion = (body as { ifVersion?: number }).ifVersion;
+
+  const store = await getRuntimeStore();
+  const project = await store.getProject(slug);
+  if (!project) return Response.json({ error: "unknown project", slug }, { status: 404 });
+  const managedError = requireStoreManaged(project);
+  if (managedError) return managedError;
+  const versionError = checkVersion(project, ifVersion);
+  if (versionError) return versionError;
+
+  const existing = project.rules.find((r) => r.ruleId === id);
+  if (!existing) return Response.json({ error: "unknown rule", id }, { status: 404 });
+
+  const validated = validateRuleDefinition(body);
+  if ("error" in validated) return validated.error;
+  const rule = validated.rule;
+  if (rule.id !== id) {
+    return Response.json({ error: "a rule's id cannot be changed via edit — delete and recreate it instead" }, { status: 400 });
+  }
+  if (project.rules.some((r) => r.ruleId === rule.id && r !== existing)) {
+    return Response.json({ error: `rule id "${rule.id}" collides with another rule` }, { status: 409 });
+  }
+
+  const rules = project.rules.map((r) => (r.ruleId === id ? { ...r, definition: rule } : r));
+  await store.saveProject({ ...project, rules });
+  invalidateConfig(slug);
+
+  const warning = detectShadowWarning(rules, id);
+  return Response.json({ rule, warning });
+}
+
+export async function DELETE(
+  req: Request,
+  ctx: { params: Promise<{ slug: string; id: string }> },
+): Promise<Response> {
+  const authError = checkAdminAuth(req);
+  if (authError) return authError;
+  const { slug, id } = await ctx.params;
+
+  const store = await getRuntimeStore();
+  const project = await store.getProject(slug);
+  if (!project) return Response.json({ error: "unknown project", slug }, { status: 404 });
+  const managedError = requireStoreManaged(project);
+  if (managedError) return managedError;
+
+  if (!project.rules.some((r) => r.ruleId === id)) {
+    return Response.json({ error: "unknown rule", id }, { status: 404 });
+  }
+  const rules = project.rules.filter((r) => r.ruleId !== id);
+  await store.saveProject({ ...project, rules });
+  invalidateConfig(slug);
+  return new Response(null, { status: 204 });
+}
