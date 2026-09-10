@@ -1,5 +1,6 @@
 // Plan 03: PATCH /api/projects/:slug/rules/:id (full-definition replace,
 // position kept), DELETE /api/projects/:slug/rules/:id.
+import { checkRuleAgainstSpec } from "@/src/contract/save-check";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
@@ -49,6 +50,12 @@ export async function PATCH(
   }
   const secretError = checkNoSecretVarsInResponse(rule, project);
   if (secretError) return secretError;
+
+  const contractWarnings = await checkRuleAgainstSpec(project.openApiDoc, rule);
+  if (contractWarnings.length > 0 && project.contract?.enforce) {
+    return Response.json({ error: "rule contradicts the OpenAPI spec", contractWarnings }, { status: 400 });
+  }
+
   if (project.rules.some((r) => r.ruleId === rule.id && r !== existing)) {
     return Response.json({ error: `rule id "${rule.id}" collides with another rule` }, { status: 409 });
   }
@@ -58,7 +65,7 @@ export async function PATCH(
   invalidateConfig(slug);
 
   const warning = detectShadowWarning(rules, id);
-  return Response.json({ rule, warning });
+  return Response.json({ rule, warning, contractWarnings });
 }
 
 export async function DELETE(

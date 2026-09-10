@@ -27,6 +27,7 @@ export function compileStoredProject(stored: StoredProject): ProjectConfig {
     faults: stored.faults,
     variables: stored.variables,
     defaultEnvironment: stored.defaultEnvironment,
+    contract: stored.contract,
     routes: [...stored.rules]
       .sort((a, b) => a.position - b.position)
       .map((r) => toRoute(r.definition)),

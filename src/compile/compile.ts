@@ -296,6 +296,7 @@ export async function compileMocks(
       faults: project.faults,
       variables: project.variables,
       defaultEnvironment: project.defaultEnvironment,
+      contract: project.contract,
     };
   }
 

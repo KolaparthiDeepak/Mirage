@@ -283,6 +283,43 @@ describe("projects write API (plan 03)", () => {
     expect((await store.getProject("upoff"))!.upstream).toBeUndefined();
   });
 
+  it("warns (default) then blocks (enforce) a rule that contradicts the OpenAPI spec (plan 13)", async () => {
+    const openApiDoc = {
+      openapi: "3.0.3",
+      paths: {
+        "/o": { post: { responses: { "201": { content: { "application/json": { schema: { type: "object", required: ["n"], properties: { n: { type: "integer" } } } } } } } } },
+      },
+    };
+    await store.saveProject({
+      slug: "contract",
+      name: "C",
+      defaults: { delayMs: 0, cors: true, notFound: { status: 404, body: {} } },
+      source: "store",
+      openApiDoc,
+      configVersion: 0,
+      updatedAt: new Date(0).toISOString(),
+      rules: [],
+    });
+
+    const { POST } = await import("./[slug]/rules/route");
+    const bad = { id: "bad", request: { method: "POST", path: "/o" }, response: { status: 201, body: { n: "not-a-number" } } };
+
+    // warn by default — the rule is still created
+    const warnRes = await POST(new Request("https://x", { method: "POST", headers: AUTH, body: JSON.stringify(bad) }), ctx({ slug: "contract" }));
+    expect(warnRes.status).toBe(201);
+    expect((await warnRes.json()).contractWarnings[0]).toMatch(/n: expected integer/);
+
+    // enforce -> blocked
+    const proj = await store.getProject("contract");
+    await store.saveProject({ ...proj!, contract: { enforce: true, rejectInvalid: false } });
+    clearConfigCache();
+    const blockRes = await POST(
+      new Request("https://x", { method: "POST", headers: AUTH, body: JSON.stringify({ ...bad, id: "bad2" }) }),
+      ctx({ slug: "contract" }),
+    );
+    expect(blockRes.status).toBe(400);
+  });
+
   it("rejects a rule whose response body references a secret variable (plan 17)", async () => {
     await seedProject("secrets");
     const projectRoute = await import("./[slug]/route");

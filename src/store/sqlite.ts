@@ -13,6 +13,7 @@ interface ProjectRow {
   faults: string | null;
   variables: string | null;
   default_environment: string | null;
+  contract: string | null;
   config_version: number;
   updated_at: string;
 }
@@ -35,6 +36,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     faults: row.faults ? (JSON.parse(row.faults) as StoredProject["faults"]) : undefined,
     variables: row.variables ? (JSON.parse(row.variables) as StoredProject["variables"]) : undefined,
     defaultEnvironment: row.default_environment ?? undefined,
+    contract: row.contract ? (JSON.parse(row.contract) as StoredProject["contract"]) : undefined,
     configVersion: row.config_version,
     updatedAt: row.updated_at,
     rules: rules
@@ -113,13 +115,13 @@ export class SqliteStore implements Store {
 
       this.db
         .prepare(
-          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, config_version, updated_at)
-           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @faults, @variables, @defaultEnvironment, @configVersion, @updatedAt)
+          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, contract, config_version, updated_at)
+           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @faults, @variables, @defaultEnvironment, @contract, @configVersion, @updatedAt)
            on conflict(slug) do update set
              name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
              openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
              faults = excluded.faults, variables = excluded.variables, default_environment = excluded.default_environment,
-             config_version = excluded.config_version, updated_at = excluded.updated_at`,
+             contract = excluded.contract, config_version = excluded.config_version, updated_at = excluded.updated_at`,
         )
         .run({
           slug: project.slug,
@@ -132,6 +134,7 @@ export class SqliteStore implements Store {
           faults: project.faults != null ? JSON.stringify(project.faults) : null,
           variables: project.variables != null ? JSON.stringify(project.variables) : null,
           defaultEnvironment: project.defaultEnvironment ?? null,
+          contract: project.contract != null ? JSON.stringify(project.contract) : null,
           configVersion: nextVersion,
           updatedAt: now,
         });

@@ -119,6 +119,14 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(back?.defaultEnvironment).toBe("prod");
     });
 
+    it("round-trips the contract config (plan 13)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("contract");
+      const contract = { validate: true, enforce: true, rejectInvalid: false };
+      await s.saveProject(project(slug, { contract }));
+      expect((await s.getProject(slug))?.contract).toEqual(contract);
+    });
+
     it("orders rules by position, independent of insertion order", async () => {
       const s = await get();
       const slug = uniqueSlug("order");

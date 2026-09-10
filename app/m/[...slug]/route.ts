@@ -7,6 +7,7 @@ import { proxyUnmatchedRequest } from "@/src/proxy";
 import { applyState } from "@/src/state/apply";
 import { computeFaults, faultRng, mangleBody, type FaultOutcome } from "@/src/faults/apply";
 import { deliverCallback, type CallbackContext } from "@/src/callbacks/deliver";
+import { checkRequestAgainstSpec } from "@/src/contract/request-check";
 import { clientHash, clientIp } from "@/src/store/client-hash";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
@@ -113,6 +114,30 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       }
     } catch (e) {
       console.error(`[state] apply failed for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  // Plan 13.2: validate the request against the spec. Never changes the
+  // response; violations are annotated onto the traffic row. With
+  // contract.rejectInvalid the request gets a 400 instead.
+  if (project.contract?.validate && process.env.MIRAGE_CONTRACT !== "off") {
+    try {
+      const violations = await checkRequestAgainstSpec(
+        project.openApiDoc,
+        req.method,
+        result.matchedRoute?.path ?? subPath,
+        result.status,
+        parsed.body,
+        parsed.query,
+      );
+      if (violations.length > 0) {
+        result.warnings.push(...violations.map((v) => `contract: ${v.path}: ${v.message}`));
+        if (project.contract.rejectInvalid) {
+          return json(400, { error: "request violates the OpenAPI contract", violations }, cors);
+        }
+      }
+    } catch (e) {
+      console.error(`[contract] request check failed for "${slug}": ${(e as Error).message}`);
     }
   }
 

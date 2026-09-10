@@ -1,5 +1,6 @@
 // Plan 03: POST /api/projects/:slug/rules — create a rule. Appends at the end
 // (position = current max + 1) unless the caller specifies one.
+import { checkRuleAgainstSpec } from "@/src/contract/save-check";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
@@ -45,6 +46,13 @@ export async function POST(
   const secretError = checkNoSecretVarsInResponse(rule, project);
   if (secretError) return secretError;
 
+  // Plan 13.1: check the response body against the spec. A warning by default;
+  // a block only when contract.enforce is on.
+  const contractWarnings = await checkRuleAgainstSpec(project.openApiDoc, rule);
+  if (contractWarnings.length > 0 && project.contract?.enforce) {
+    return Response.json({ error: "rule contradicts the OpenAPI spec", contractWarnings }, { status: 400 });
+  }
+
   if (project.rules.some((r) => r.ruleId === rule.id)) {
     return Response.json({ error: `rule id "${rule.id}" already exists in this project` }, { status: 409 });
   }
@@ -55,5 +63,5 @@ export async function POST(
   invalidateConfig(slug);
 
   const warning = detectShadowWarning(rules, rule.id);
-  return Response.json({ rule, warning }, { status: 201 });
+  return Response.json({ rule, warning, contractWarnings }, { status: 201 });
 }

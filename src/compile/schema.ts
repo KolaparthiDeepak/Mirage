@@ -124,6 +124,19 @@ export const projectVariableSchema = z
   })
   .strict();
 
+// Plan 13 — contract validation against the project's OpenAPI doc.
+export const contractSchema = z
+  .object({
+    /** Validate requests at request time. Defaults on for spec-backed
+     *  projects (applied by the caller), off otherwise. */
+    validate: z.boolean().optional(),
+    /** Refuse a rule save whose response body contradicts the spec. */
+    enforce: z.boolean().default(false),
+    /** Return 400 for a request that violates the spec (opt-in). */
+    rejectInvalid: z.boolean().default(false),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
@@ -132,6 +145,7 @@ export const projectYamlSchema = z
     faults: faultsSchema.optional(),
     variables: z.array(projectVariableSchema).optional(),
     defaultEnvironment: z.string().min(1).optional(),
+    contract: contractSchema.optional(),
     // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
     // body. Default true; an existing project with examples throughout is
     // unaffected either way.

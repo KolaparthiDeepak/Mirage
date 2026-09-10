@@ -1,5 +1,5 @@
 import type { Rule } from "../compile/schema";
-import type { FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
+import type { ContractConfig, FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
 
 /** Project metadata as stored — everything compileMocks() would read from
  *  project.yaml, plus the bookkeeping fields the store adds. */
@@ -19,6 +19,8 @@ export interface StoredProjectMeta {
   /** Plan 17. Shared project variables; `{{vars.key}}` resolves from these. */
   variables?: ProjectVariable[];
   defaultEnvironment?: string;
+  /** Plan 13. */
+  contract?: ContractConfig;
   configVersion: number;
   updatedAt: string; // ISO-8601
 }

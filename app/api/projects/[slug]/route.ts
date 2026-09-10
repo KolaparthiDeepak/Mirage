@@ -1,7 +1,7 @@
 // Plan 03: PATCH /api/projects/:slug (name/basePath/defaults), DELETE (requires
 // the client to have the user type the slug to confirm — that's a UI gate;
 // the server just deletes on request).
-import { faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
+import { contractSchema, faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
@@ -42,6 +42,7 @@ export async function PATCH(
     faults?: unknown;
     variables?: unknown;
     defaultEnvironment?: string | null;
+    contract?: unknown;
     ifVersion?: number;
   };
 
@@ -113,6 +114,19 @@ export async function PATCH(
   const defaultEnvironment =
     "defaultEnvironment" in parsedBody ? (parsedBody.defaultEnvironment || undefined) : project.defaultEnvironment;
 
+  let contract = project.contract;
+  if ("contract" in parsedBody) {
+    if (parsedBody.contract == null) {
+      contract = undefined;
+    } else {
+      const shape = contractSchema.safeParse(parsedBody.contract);
+      if (!shape.success) {
+        return Response.json({ error: `contract.${shape.error.issues[0]!.path.join(".") || "config"}: ${shape.error.issues[0]!.message}` }, { status: 400 });
+      }
+      contract = shape.data;
+    }
+  }
+
   const merged = {
     ...project,
     name: parsedBody.name ?? project.name,
@@ -122,6 +136,7 @@ export async function PATCH(
     faults,
     variables,
     defaultEnvironment,
+    contract,
   };
   const validated = projectYamlSchema.safeParse({ name: merged.name, slug, basePath: merged.basePath, defaults: merged.defaults });
   if (!validated.success) {

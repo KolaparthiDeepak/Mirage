@@ -24,6 +24,7 @@ interface ProjectRow {
   faults: StoredProject["faults"] | null;
   variables: StoredProject["variables"] | null;
   default_environment: string | null;
+  contract: StoredProject["contract"] | null;
   config_version: number;
   updated_at: string;
 }
@@ -46,6 +47,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     faults: row.faults ?? undefined,
     variables: row.variables ?? undefined,
     defaultEnvironment: row.default_environment ?? undefined,
+    contract: row.contract ?? undefined,
     configVersion: Number(row.config_version),
     updatedAt: new Date(row.updated_at).toISOString(),
     rules: [...rules]
@@ -119,19 +121,20 @@ export class PostgresStore implements Store {
       const nextVersion = (existing[0] ? Number(existing[0].config_version) : 0) + 1;
 
       await tx`
-        insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, config_version, updated_at)
+        insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, contract, config_version, updated_at)
         values (
           ${p.slug}, ${p.name}, ${p.basePath ?? null}, ${tx.json(toJsonb(p.defaults))},
           ${p.openApiDoc != null ? tx.json(toJsonb(p.openApiDoc)) : null}, ${p.source},
           ${p.upstream != null ? tx.json(toJsonb(p.upstream)) : null},
           ${p.faults != null ? tx.json(toJsonb(p.faults)) : null},
-          ${p.variables != null ? tx.json(toJsonb(p.variables)) : null}, ${p.defaultEnvironment ?? null}, ${nextVersion}, now()
+          ${p.variables != null ? tx.json(toJsonb(p.variables)) : null}, ${p.defaultEnvironment ?? null},
+          ${p.contract != null ? tx.json(toJsonb(p.contract)) : null}, ${nextVersion}, now()
         )
         on conflict (slug) do update set
           name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
           openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
           faults = excluded.faults, variables = excluded.variables, default_environment = excluded.default_environment,
-          config_version = excluded.config_version, updated_at = excluded.updated_at
+          contract = excluded.contract, config_version = excluded.config_version, updated_at = excluded.updated_at
       `;
 
       await tx`delete from rule where slug = ${p.slug}`;

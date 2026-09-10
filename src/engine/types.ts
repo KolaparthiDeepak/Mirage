@@ -109,6 +109,14 @@ export interface ProjectConfig {
   faults?: FaultsConfig;                 // plan 11 — absent / enabled:false means "off"
   variables?: ProjectVariable[];         // plan 17
   defaultEnvironment?: string;           // plan 17 — used when x-mirage-env is absent
+  contract?: ContractConfig;             // plan 13
+}
+
+/** Plan 13. */
+export interface ContractConfig {
+  validate?: boolean;
+  enforce: boolean;
+  rejectInvalid: boolean;
 }
 
 export interface ResolveResult {
