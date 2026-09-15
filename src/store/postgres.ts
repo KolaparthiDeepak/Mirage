@@ -7,6 +7,7 @@ import type {
   ProjectSummary,
   Store,
   StoredAlert,
+  StoredDriftReport,
   StoredFlow,
   StoredProject,
   StoredRule,
@@ -65,6 +66,7 @@ interface ProjectRow {
   default_environment: string | null;
   contract: StoredProject["contract"] | null;
   docs: StoredProject["docs"] | null;
+  drift: StoredProject["drift"] | null;
   config_version: number;
   updated_at: string;
 }
@@ -89,6 +91,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     defaultEnvironment: row.default_environment ?? undefined,
     contract: row.contract ?? undefined,
     docs: row.docs ?? undefined,
+    drift: row.drift ?? undefined,
     configVersion: Number(row.config_version),
     updatedAt: new Date(row.updated_at).toISOString(),
     rules: [...rules]
@@ -162,7 +165,7 @@ export class PostgresStore implements Store {
       const nextVersion = (existing[0] ? Number(existing[0].config_version) : 0) + 1;
 
       await tx`
-        insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, contract, docs, config_version, updated_at)
+        insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, contract, docs, drift, config_version, updated_at)
         values (
           ${p.slug}, ${p.name}, ${p.basePath ?? null}, ${tx.json(toJsonb(p.defaults))},
           ${p.openApiDoc != null ? tx.json(toJsonb(p.openApiDoc)) : null}, ${p.source},
@@ -170,13 +173,14 @@ export class PostgresStore implements Store {
           ${p.faults != null ? tx.json(toJsonb(p.faults)) : null},
           ${p.variables != null ? tx.json(toJsonb(p.variables)) : null}, ${p.defaultEnvironment ?? null},
           ${p.contract != null ? tx.json(toJsonb(p.contract)) : null},
-          ${p.docs != null ? tx.json(toJsonb(p.docs)) : null}, ${nextVersion}, now()
+          ${p.docs != null ? tx.json(toJsonb(p.docs)) : null},
+          ${p.drift != null ? tx.json(toJsonb(p.drift)) : null}, ${nextVersion}, now()
         )
         on conflict (slug) do update set
           name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
           openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
           faults = excluded.faults, variables = excluded.variables, default_environment = excluded.default_environment,
-          contract = excluded.contract, docs = excluded.docs, config_version = excluded.config_version, updated_at = excluded.updated_at
+          contract = excluded.contract, docs = excluded.docs, drift = excluded.drift, config_version = excluded.config_version, updated_at = excluded.updated_at
       `;
 
       await tx`delete from rule where slug = ${p.slug}`;
@@ -484,6 +488,38 @@ export class PostgresStore implements Store {
     `;
   }
 
+  async saveDriftReport(report: StoredDriftReport): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into drift_report (id, slug, rule_id, findings, observed_response, error, dismissed, first_seen_at, last_checked_at)
+      values (
+        ${report.id}, ${report.slug}, ${report.ruleId}, ${this.sql.json(toJsonb(report.findings))},
+        ${report.observedResponse != null ? this.sql.json(toJsonb(report.observedResponse)) : null},
+        ${report.error}, ${report.dismissed}, ${report.firstSeenAt}, ${report.lastCheckedAt}
+      )
+      on conflict (slug, id) do update set
+        findings = excluded.findings, observed_response = excluded.observed_response, error = excluded.error,
+        dismissed = excluded.dismissed, first_seen_at = excluded.first_seen_at, last_checked_at = excluded.last_checked_at
+    `;
+  }
+
+  async getDriftReport(slug: string, ruleId: string): Promise<StoredDriftReport | null> {
+    await this.ready;
+    const rows = await this.sql<PgDriftReportRow[]>`select * from drift_report where slug = ${slug} and id = ${ruleId}`;
+    return rows[0] ? pgRowToDriftReport(rows[0]) : null;
+  }
+
+  async listDriftReports(slug: string): Promise<StoredDriftReport[]> {
+    await this.ready;
+    const rows = await this.sql<PgDriftReportRow[]>`select * from drift_report where slug = ${slug} order by first_seen_at desc`;
+    return rows.map(pgRowToDriftReport);
+  }
+
+  async deleteDriftReport(slug: string, ruleId: string): Promise<void> {
+    await this.ready;
+    await this.sql`delete from drift_report where slug = ${slug} and id = ${ruleId}`;
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }
@@ -569,6 +605,32 @@ function pgRowToAlert(r: PgAlertRow): StoredAlert {
     currentlyFiring: r.currently_firing,
     createdAt: new Date(r.created_at).toISOString(),
     updatedAt: new Date(r.updated_at).toISOString(),
+  };
+}
+
+interface PgDriftReportRow {
+  id: string;
+  slug: string;
+  rule_id: string;
+  findings: StoredDriftReport["findings"];
+  observed_response: StoredDriftReport["observedResponse"];
+  error: string | null;
+  dismissed: boolean;
+  first_seen_at: string;
+  last_checked_at: string;
+}
+
+function pgRowToDriftReport(r: PgDriftReportRow): StoredDriftReport {
+  return {
+    id: r.id,
+    slug: r.slug,
+    ruleId: r.rule_id,
+    findings: r.findings,
+    observedResponse: r.observed_response ?? null,
+    error: r.error,
+    dismissed: r.dismissed,
+    firstSeenAt: new Date(r.first_seen_at).toISOString(),
+    lastCheckedAt: new Date(r.last_checked_at).toISOString(),
   };
 }
 

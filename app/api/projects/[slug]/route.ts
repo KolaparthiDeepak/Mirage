@@ -1,7 +1,7 @@
 // Plan 03: PATCH /api/projects/:slug (name/basePath/defaults), DELETE (requires
 // the client to have the user type the slug to confirm — that's a UI gate;
 // the server just deletes on request).
-import { contractSchema, docsSchema, faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
+import { contractSchema, docsSchema, driftSchema, faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
@@ -44,6 +44,7 @@ export async function PATCH(
     defaultEnvironment?: string | null;
     contract?: unknown;
     docs?: unknown;
+    drift?: unknown;
     ifVersion?: number;
   };
 
@@ -141,6 +142,19 @@ export async function PATCH(
     }
   }
 
+  let drift = project.drift;
+  if ("drift" in parsedBody) {
+    if (parsedBody.drift == null) {
+      drift = undefined;
+    } else {
+      const shape = driftSchema.safeParse(parsedBody.drift);
+      if (!shape.success) {
+        return Response.json({ error: `drift.${shape.error.issues[0]!.path.join(".") || "config"}: ${shape.error.issues[0]!.message}` }, { status: 400 });
+      }
+      drift = shape.data;
+    }
+  }
+
   const merged = {
     ...project,
     name: parsedBody.name ?? project.name,
@@ -152,6 +166,7 @@ export async function PATCH(
     defaultEnvironment,
     contract,
     docs,
+    drift,
   };
   const validated = projectYamlSchema.safeParse({ name: merged.name, slug, basePath: merged.basePath, defaults: merged.defaults });
   if (!validated.success) {
@@ -161,7 +176,7 @@ export async function PATCH(
 
   const metaOf = (p: StoredProject) => ({
     name: p.name, basePath: p.basePath, defaults: p.defaults,
-    upstream: p.upstream, faults: p.faults, contract: p.contract, docs: p.docs,
+    upstream: p.upstream, faults: p.faults, contract: p.contract, docs: p.docs, drift: p.drift,
     defaultEnvironment: p.defaultEnvironment,
     variables: (p.variables ?? []).map((v) => (v.secret ? { ...v, value: "***" } : v)),
   });

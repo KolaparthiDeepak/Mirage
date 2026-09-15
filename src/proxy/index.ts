@@ -27,7 +27,10 @@ export interface ProxyInput {
 
 export type ProxyResult = ProxyOutcome | { rateLimited: true };
 
-function buildTarget(base: URL, subPath: string, search: string): URL {
+/** Exported for src/drift/probe.ts (plan 22): a drift probe targets the same
+ *  upstream URL shape as a real proxied request — one implementation, two
+ *  callers. */
+export function buildTarget(base: URL, subPath: string, search: string): URL {
   const target = new URL(base.toString());
   const prefix = target.pathname === "/" ? "" : target.pathname.replace(/\/$/, "");
   target.pathname = prefix + subPath;

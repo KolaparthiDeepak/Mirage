@@ -49,6 +49,10 @@ function fakeStore(getProject: Store["getProject"]): Store {
     deleteAlert: async () => {},
     updateAlertState: async () => {},
     countTraffic: async () => 0,
+    saveDriftReport: async () => {},
+    getDriftReport: async () => null,
+    listDriftReports: async () => [],
+    deleteDriftReport: async () => {},
     close: async () => {},
   };
 }

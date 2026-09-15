@@ -149,6 +149,22 @@ export const docsSchema = z
   })
   .strict();
 
+// Plan 22 — drift detection against upstream. Opt-in and off by default: a
+// probe fires a real request at a real API, which must never happen as a
+// side effect of anything else. `schedule` is metadata only — the actual
+// cadence is enforced by whoever calls POST /api/cron/drift on a timer, the
+// same deferral the alert sweep (plan 21) makes for its own cron caller.
+export const driftSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    allowUnsafeMethods: z.boolean().default(false),
+    compareCosmetic: z.boolean().default(false),
+    schedule: z.enum(["manual", "daily", "weekly"]).default("manual"),
+    /** Path or absolute URL on the upstream host serving its OpenAPI doc. */
+    specUrl: z.string().min(1).optional(),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
@@ -159,6 +175,7 @@ export const projectYamlSchema = z
     defaultEnvironment: z.string().min(1).optional(),
     contract: contractSchema.optional(),
     docs: docsSchema.optional(),
+    drift: driftSchema.optional(),
     // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
     // body. Default true; an existing project with examples throughout is
     // unaffected either way.
@@ -267,6 +284,16 @@ export const ruleSchema = z
     response: mockResponseSchema.optional(),
     responses: responseVariantsSchema.optional(),
     callback: callbackSchema.optional(),
+    // Plan 22 — per-rule drift-check tuning. `acknowledgeUnsafeMethod` is the
+    // "genuinely bad day" gate: even with the project's driftConfig allowing
+    // unsafe methods, a POST/PUT/DELETE rule still needs this set explicitly.
+    drift: z
+      .object({
+        ignorePaths: z.array(z.string()).default([]),
+        acknowledgeUnsafeMethod: z.boolean().default(false),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((r, ctx) => {

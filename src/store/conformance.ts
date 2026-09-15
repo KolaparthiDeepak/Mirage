@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { Rule } from "../compile/schema";
-import type { Store, StoredProject, TrafficEntry } from "./types";
+import type { Store, StoredDriftReport, StoredProject, TrafficEntry } from "./types";
 
 function rule(id: string): Rule {
   return { id, request: { method: "GET", path: `/${id}` }, response: { status: 200 } };
@@ -640,6 +640,70 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       const recovered = await s.getAlert(slug, "a1");
       expect(recovered?.currentlyFiring).toBe(false);
       expect(recovered?.lastRecoveredAt).toBe("2026-05-01T00:10:00.000Z");
+    });
+
+    // --- plan 22: drift ---
+
+    it("round-trips a project's drift config", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-config");
+      await s.saveProject(
+        project(slug, {
+          drift: { enabled: true, allowUnsafeMethods: false, compareCosmetic: true, schedule: "daily", specUrl: "/openapi.json" },
+        }),
+      );
+      const back = await s.getProject(slug);
+      expect(back?.drift).toEqual({ enabled: true, allowUnsafeMethods: false, compareCosmetic: true, schedule: "daily", specUrl: "/openapi.json" });
+    });
+
+    function driftReportFixture(slug: string, overrides: Partial<StoredDriftReport> = {}): StoredDriftReport {
+      const now = new Date().toISOString();
+      return {
+        id: "r1",
+        slug,
+        ruleId: "r1",
+        findings: [{ severity: "breaking", path: "$.id", kind: "missing-field", detail: "gone upstream" }],
+        observedResponse: { status: 200, body: { id: null } },
+        error: null,
+        dismissed: false,
+        firstSeenAt: now,
+        lastCheckedAt: now,
+        ...overrides,
+      };
+    }
+
+    it("round-trips a drift report and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-report");
+      await s.saveDriftReport(driftReportFixture(slug));
+
+      const back = await s.getDriftReport(slug, "r1");
+      expect(back).toMatchObject({ id: "r1", ruleId: "r1", dismissed: false });
+      expect(back?.findings).toHaveLength(1);
+
+      await s.saveDriftReport(driftReportFixture(slug, { dismissed: true }));
+      expect((await s.getDriftReport(slug, "r1"))?.dismissed).toBe(true);
+      expect(await s.listDriftReports(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown drift report and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-report-del");
+      expect(await s.getDriftReport(slug, "nope")).toBeNull();
+
+      await s.saveDriftReport(driftReportFixture(slug));
+      await s.deleteDriftReport(slug, "r1");
+      expect(await s.getDriftReport(slug, "r1")).toBeNull();
+    });
+
+    it("lists a project's drift reports newest-first", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-report-list");
+      await s.saveDriftReport(driftReportFixture(slug, { id: "r1", ruleId: "r1", firstSeenAt: "2026-01-01T00:00:00.000Z" }));
+      await s.saveDriftReport(driftReportFixture(slug, { id: "r2", ruleId: "r2", firstSeenAt: "2026-01-02T00:00:00.000Z" }));
+
+      const reports = await s.listDriftReports(slug);
+      expect(reports.map((r) => r.id)).toEqual(["r2", "r1"]);
     });
   });
 }

@@ -1,5 +1,6 @@
 import type { Rule } from "../compile/schema";
-import type { ContractConfig, DocsConfig, FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
+import type { ContractConfig, DocsConfig, DriftConfig, FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
+import type { DriftFinding } from "../drift/types";
 
 /** Project metadata as stored — everything compileMocks() would read from
  *  project.yaml, plus the bookkeeping fields the store adds. */
@@ -23,6 +24,8 @@ export interface StoredProjectMeta {
   contract?: ContractConfig;
   /** Plan 18. Absent/enabled:false means the /d/:slug docs page 404s. */
   docs?: DocsConfig;
+  /** Plan 22. Absent/enabled:false means drift checks never run. */
+  drift?: DriftConfig;
   configVersion: number;
   updatedAt: string; // ISO-8601
 }
@@ -134,6 +137,30 @@ export interface StoredAlert {
   updatedAt: string;
 }
 
+/** Plan 22 — one rule's current drift state. One row per (slug, ruleId): a
+ *  drift check upserts it, "no drift found" deletes it — the table only ever
+ *  holds what's currently wrong, never a growing history of past checks.
+ *  Spec drift (a whole-project check, not a rule's) uses the reserved
+ *  ruleId "__openapi_spec__". */
+export interface StoredDriftReport {
+  id: string; // == ruleId, or "__openapi_spec__"
+  slug: string;
+  ruleId: string;
+  findings: DriftFinding[];
+  /** The upstream's actual response at the time findings were recorded — what
+   *  "Accept upstream" writes into the rule. Null whenever findings is empty
+   *  or this is the reserved spec-drift report (id "__openapi_spec__"),
+   *  which has no single response to accept. */
+  observedResponse: { status: number; body: unknown } | null;
+  /** Set instead of findings when the probe itself couldn't complete (a
+   *  non-safe method without acknowledgement, a network failure, a
+   *  non-JSON response) — never reported as drift, per the plan's risk table. */
+  error: string | null;
+  dismissed: boolean;
+  firstSeenAt: string;
+  lastCheckedAt: string;
+}
+
 /** Plan 16 — a saved flow definition. `definition` is `flowSchema`'s shape. */
 export interface StoredFlow {
   id: string;
@@ -238,6 +265,14 @@ export interface Store {
     id: string,
     state: Pick<StoredAlert, "lastFiredAt" | "lastRecoveredAt" | "lastError" | "currentlyFiring">,
   ): Promise<void>;
+
+  /** Plan 22 — drift reports. One row per (slug, ruleId); saveDriftReport
+   *  upserts, deleteDriftReport clears a rule back to "no known drift". */
+  saveDriftReport(report: StoredDriftReport): Promise<void>;
+  getDriftReport(slug: string, ruleId: string): Promise<StoredDriftReport | null>;
+  listDriftReports(slug: string): Promise<StoredDriftReport[]>;
+  deleteDriftReport(slug: string, ruleId: string): Promise<void>;
+
   deleteProject(slug: string): Promise<void>;
   getConfigVersion(slug: string): Promise<number | null>;
 

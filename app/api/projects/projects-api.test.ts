@@ -275,6 +275,39 @@ describe("projects write API (plan 03)", () => {
     expect((await store.getProject("docsme"))!.docs).toBeUndefined();
   });
 
+  it("PATCH /api/projects/:slug enables and disables drift detection (plan 22)", async () => {
+    await seedProject("driftme");
+    const { PATCH } = await import("./[slug]/route");
+    const on = await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ drift: { enabled: true, allowUnsafeMethods: false, compareCosmetic: false, schedule: "weekly" } }),
+      }),
+      ctx({ slug: "driftme" }),
+    );
+    expect(on.status).toBe(200);
+    expect((await store.getProject("driftme"))!.drift).toEqual({
+      enabled: true,
+      allowUnsafeMethods: false,
+      compareCosmetic: false,
+      schedule: "weekly",
+    });
+
+    const rejected = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ drift: { schedule: "hourly" } }) }),
+      ctx({ slug: "driftme" }),
+    );
+    expect(rejected.status).toBe(400);
+
+    const off = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ drift: null }) }),
+      ctx({ slug: "driftme" }),
+    );
+    expect(off.status).toBe(200);
+    expect((await store.getProject("driftme"))!.drift).toBeUndefined();
+  });
+
   it("PATCH /api/projects/:slug rejects an upstream URL pointing at a private address (plan 07)", async () => {
     await seedProject("ssrf");
     const { PATCH } = await import("./[slug]/route");

@@ -7,6 +7,7 @@ import type {
   ProjectSummary,
   Store,
   StoredAlert,
+  StoredDriftReport,
   StoredFlow,
   StoredProject,
   StoredRule,
@@ -54,6 +55,7 @@ interface ProjectRow {
   default_environment: string | null;
   contract: string | null;
   docs: string | null;
+  drift: string | null;
   config_version: number;
   updated_at: string;
 }
@@ -78,6 +80,7 @@ function rowToProject(row: ProjectRow, rules: RuleRow[]): StoredProject {
     defaultEnvironment: row.default_environment ?? undefined,
     contract: row.contract ? (JSON.parse(row.contract) as StoredProject["contract"]) : undefined,
     docs: row.docs ? (JSON.parse(row.docs) as StoredProject["docs"]) : undefined,
+    drift: row.drift ? (JSON.parse(row.drift) as StoredProject["drift"]) : undefined,
     configVersion: row.config_version,
     updatedAt: row.updated_at,
     rules: rules
@@ -156,13 +159,13 @@ export class SqliteStore implements Store {
 
       this.db
         .prepare(
-          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, contract, docs, config_version, updated_at)
-           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @faults, @variables, @defaultEnvironment, @contract, @docs, @configVersion, @updatedAt)
+          `insert into project (slug, name, base_path, defaults, openapi_doc, source, upstream, faults, variables, default_environment, contract, docs, drift, config_version, updated_at)
+           values (@slug, @name, @basePath, @defaults, @openApiDoc, @source, @upstream, @faults, @variables, @defaultEnvironment, @contract, @docs, @drift, @configVersion, @updatedAt)
            on conflict(slug) do update set
              name = excluded.name, base_path = excluded.base_path, defaults = excluded.defaults,
              openapi_doc = excluded.openapi_doc, source = excluded.source, upstream = excluded.upstream,
              faults = excluded.faults, variables = excluded.variables, default_environment = excluded.default_environment,
-             contract = excluded.contract, docs = excluded.docs, config_version = excluded.config_version, updated_at = excluded.updated_at`,
+             contract = excluded.contract, docs = excluded.docs, drift = excluded.drift, config_version = excluded.config_version, updated_at = excluded.updated_at`,
         )
         .run({
           slug: project.slug,
@@ -177,6 +180,7 @@ export class SqliteStore implements Store {
           defaultEnvironment: project.defaultEnvironment ?? null,
           contract: project.contract != null ? JSON.stringify(project.contract) : null,
           docs: project.docs != null ? JSON.stringify(project.docs) : null,
+          drift: project.drift != null ? JSON.stringify(project.drift) : null,
           configVersion: nextVersion,
           updatedAt: now,
         });
@@ -514,6 +518,44 @@ export class SqliteStore implements Store {
       });
   }
 
+  async saveDriftReport(report: StoredDriftReport): Promise<void> {
+    this.db
+      .prepare(
+        `insert into drift_report (id, slug, rule_id, findings, observed_response, error, dismissed, first_seen_at, last_checked_at)
+         values (@id, @slug, @ruleId, @findings, @observedResponse, @error, @dismissed, @firstSeenAt, @lastCheckedAt)
+         on conflict(slug, id) do update set
+           findings = excluded.findings, observed_response = excluded.observed_response, error = excluded.error,
+           dismissed = excluded.dismissed, first_seen_at = excluded.first_seen_at, last_checked_at = excluded.last_checked_at`,
+      )
+      .run({
+        id: report.id,
+        slug: report.slug,
+        ruleId: report.ruleId,
+        findings: JSON.stringify(report.findings),
+        observedResponse: report.observedResponse != null ? JSON.stringify(report.observedResponse) : null,
+        error: report.error,
+        dismissed: report.dismissed ? 1 : 0,
+        firstSeenAt: report.firstSeenAt,
+        lastCheckedAt: report.lastCheckedAt,
+      });
+  }
+
+  async getDriftReport(slug: string, ruleId: string): Promise<StoredDriftReport | null> {
+    const row = this.db.prepare("select * from drift_report where slug = ? and id = ?").get(slug, ruleId) as
+      | SqliteDriftReportRow
+      | undefined;
+    return row ? sqliteRowToDriftReport(row) : null;
+  }
+
+  async listDriftReports(slug: string): Promise<StoredDriftReport[]> {
+    const rows = this.db.prepare("select * from drift_report where slug = ? order by first_seen_at desc").all(slug) as SqliteDriftReportRow[];
+    return rows.map(sqliteRowToDriftReport);
+  }
+
+  async deleteDriftReport(slug: string, ruleId: string): Promise<void> {
+    this.db.prepare("delete from drift_report where slug = ? and id = ?").run(slug, ruleId);
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }
@@ -599,6 +641,32 @@ function sqliteRowToAlert(r: SqliteAlertRow): StoredAlert {
     currentlyFiring: r.currently_firing === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+interface SqliteDriftReportRow {
+  id: string;
+  slug: string;
+  rule_id: string;
+  findings: string;
+  observed_response: string | null;
+  error: string | null;
+  dismissed: number;
+  first_seen_at: string;
+  last_checked_at: string;
+}
+
+function sqliteRowToDriftReport(r: SqliteDriftReportRow): StoredDriftReport {
+  return {
+    id: r.id,
+    slug: r.slug,
+    ruleId: r.rule_id,
+    findings: JSON.parse(r.findings),
+    observedResponse: r.observed_response ? JSON.parse(r.observed_response) : null,
+    error: r.error,
+    dismissed: r.dismissed === 1,
+    firstSeenAt: r.first_seen_at,
+    lastCheckedAt: r.last_checked_at,
   };
 }
 
