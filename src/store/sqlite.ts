@@ -6,9 +6,11 @@ import type {
   FlowRun,
   ProjectSummary,
   Store,
+  StoredAlert,
   StoredFlow,
   StoredProject,
   StoredRule,
+  StoredView,
   TrafficEntry,
   TrafficFilter,
 } from "./types";
@@ -285,20 +287,9 @@ export class SqliteStore implements Store {
   }
 
   async queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]> {
+    const { clauses, params } = trafficWhere(filter);
     const limit = filter.limit ?? 50;
-    const clauses = ["slug = @slug"];
-    const params: Record<string, unknown> = { slug: filter.slug, limit };
-    if (filter.id) { clauses.push("id = @id"); params.id = filter.id; }
-    if (filter.before) { clauses.push("at < @before"); params.before = filter.before; }
-    if (filter.since) { clauses.push("at > @since"); params.since = filter.since; }
-    if (filter.unmatchedOnly === true) clauses.push("matched_rule_id is null");
-    else if (filter.unmatchedOnly === false) clauses.push("matched_rule_id is not null");
-    if (filter.viaUpstreamOnly === true) clauses.push("via_upstream = 1");
-    if (filter.method) { clauses.push("method = @method"); params.method = filter.method; }
-    if (filter.ruleId) { clauses.push("matched_rule_id = @ruleId"); params.ruleId = filter.ruleId; }
-    if (filter.pathContains) { clauses.push("path like @pathContains"); params.pathContains = `%${filter.pathContains}%`; }
-    if (filter.statusFrom != null) { clauses.push("status >= @statusFrom"); params.statusFrom = filter.statusFrom; }
-    if (filter.statusTo != null) { clauses.push("status <= @statusTo"); params.statusTo = filter.statusTo; }
+    params.limit = limit;
 
     // since= (polling) wants oldest-first so a client appends in arrival
     // order; every other query wants newest-first.
@@ -307,6 +298,15 @@ export class SqliteStore implements Store {
       .prepare(`select * from traffic where ${clauses.join(" and ")} order by ${order} limit @limit`)
       .all(params) as SqliteTrafficRow[];
     return rows.map(sqliteRowToTrafficEntry);
+  }
+
+  /** Plan 21 — a saved view's live count badge. Same filters as queryTraffic,
+   *  minus paging: a plain filtered COUNT, no windowing needed (unlike the
+   *  stats endpoint's percentiles, a count doesn't need to sort a column). */
+  async countTraffic(filter: TrafficFilter): Promise<number> {
+    const { clauses, params } = trafficWhere(filter);
+    const row = this.db.prepare(`select count(*) as n from traffic where ${clauses.join(" and ")}`).get(params) as { n: number };
+    return row.n;
   }
 
   async pruneTraffic(before: Date, maxRowsPerProject: number): Promise<number> {
@@ -422,6 +422,98 @@ export class SqliteStore implements Store {
     return this.db.prepare("delete from flow_run where started_at < ?").run(before.toISOString()).changes;
   }
 
+  async saveView(view: StoredView): Promise<void> {
+    this.db
+      .prepare(
+        `insert into saved_view (id, slug, name, query, created_at) values (@id, @slug, @name, @query, @createdAt)
+         on conflict(slug, id) do update set name = excluded.name, query = excluded.query`,
+      )
+      .run({ id: view.id, slug: view.slug, name: view.name, query: JSON.stringify(view.query), createdAt: view.createdAt });
+  }
+
+  async getView(slug: string, id: string): Promise<StoredView | null> {
+    const row = this.db.prepare("select * from saved_view where slug = ? and id = ?").get(slug, id) as SqliteViewRow | undefined;
+    return row ? sqliteRowToView(row) : null;
+  }
+
+  async listViews(slug: string): Promise<StoredView[]> {
+    const rows = this.db.prepare("select * from saved_view where slug = ? order by name").all(slug) as SqliteViewRow[];
+    return rows.map(sqliteRowToView);
+  }
+
+  async deleteView(slug: string, id: string): Promise<void> {
+    this.db.prepare("delete from saved_view where slug = ? and id = ?").run(slug, id);
+  }
+
+  async saveAlert(alert: StoredAlert): Promise<void> {
+    this.db
+      .prepare(
+        `insert into alert (id, slug, name, view, condition, notify, cooldown_minutes, enabled,
+           last_fired_at, last_recovered_at, last_error, currently_firing, created_at, updated_at)
+         values (@id, @slug, @name, @view, @condition, @notify, @cooldownMinutes, @enabled,
+           @lastFiredAt, @lastRecoveredAt, @lastError, @currentlyFiring, @createdAt, @updatedAt)
+         on conflict(slug, id) do update set
+           name = excluded.name, view = excluded.view, condition = excluded.condition, notify = excluded.notify,
+           cooldown_minutes = excluded.cooldown_minutes, enabled = excluded.enabled, updated_at = excluded.updated_at`,
+      )
+      .run({
+        id: alert.id,
+        slug: alert.slug,
+        name: alert.name,
+        view: alert.view,
+        condition: JSON.stringify(alert.condition),
+        notify: JSON.stringify(alert.notify),
+        cooldownMinutes: alert.cooldownMinutes,
+        enabled: alert.enabled ? 1 : 0,
+        lastFiredAt: alert.lastFiredAt,
+        lastRecoveredAt: alert.lastRecoveredAt,
+        lastError: alert.lastError,
+        currentlyFiring: alert.currentlyFiring ? 1 : 0,
+        createdAt: alert.createdAt,
+        updatedAt: alert.updatedAt,
+      });
+  }
+
+  async getAlert(slug: string, id: string): Promise<StoredAlert | null> {
+    const row = this.db.prepare("select * from alert where slug = ? and id = ?").get(slug, id) as SqliteAlertRow | undefined;
+    return row ? sqliteRowToAlert(row) : null;
+  }
+
+  async listAlerts(slug: string): Promise<StoredAlert[]> {
+    const rows = this.db.prepare("select * from alert where slug = ? order by name").all(slug) as SqliteAlertRow[];
+    return rows.map(sqliteRowToAlert);
+  }
+
+  async listAllEnabledAlerts(): Promise<StoredAlert[]> {
+    const rows = this.db.prepare("select * from alert where enabled = 1").all() as SqliteAlertRow[];
+    return rows.map(sqliteRowToAlert);
+  }
+
+  async deleteAlert(slug: string, id: string): Promise<void> {
+    this.db.prepare("delete from alert where slug = ? and id = ?").run(slug, id);
+  }
+
+  async updateAlertState(
+    slug: string,
+    id: string,
+    state: Pick<StoredAlert, "lastFiredAt" | "lastRecoveredAt" | "lastError" | "currentlyFiring">,
+  ): Promise<void> {
+    this.db
+      .prepare(
+        `update alert set last_fired_at = @lastFiredAt, last_recovered_at = @lastRecoveredAt,
+           last_error = @lastError, currently_firing = @currentlyFiring
+         where slug = @slug and id = @id`,
+      )
+      .run({
+        slug,
+        id,
+        lastFiredAt: state.lastFiredAt,
+        lastRecoveredAt: state.lastRecoveredAt,
+        lastError: state.lastError,
+        currentlyFiring: state.currentlyFiring ? 1 : 0,
+      });
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }
@@ -460,6 +552,75 @@ function sqliteRowToFlowRun(r: SqliteFlowRunRow): FlowRun {
     status: r.status,
     results: JSON.parse(r.results),
   };
+}
+
+interface SqliteViewRow {
+  id: string;
+  slug: string;
+  name: string;
+  query: string;
+  created_at: string;
+}
+
+function sqliteRowToView(r: SqliteViewRow): StoredView {
+  return { id: r.id, slug: r.slug, name: r.name, query: JSON.parse(r.query), createdAt: r.created_at };
+}
+
+interface SqliteAlertRow {
+  id: string;
+  slug: string;
+  name: string;
+  view: string;
+  condition: string;
+  notify: string;
+  cooldown_minutes: number;
+  enabled: number;
+  last_fired_at: string | null;
+  last_recovered_at: string | null;
+  last_error: string | null;
+  currently_firing: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function sqliteRowToAlert(r: SqliteAlertRow): StoredAlert {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    view: r.view,
+    condition: JSON.parse(r.condition),
+    notify: JSON.parse(r.notify),
+    cooldownMinutes: r.cooldown_minutes,
+    enabled: r.enabled === 1,
+    lastFiredAt: r.last_fired_at,
+    lastRecoveredAt: r.last_recovered_at,
+    lastError: r.last_error,
+    currentlyFiring: r.currently_firing === 1,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+/** Shared by queryTraffic and countTraffic (plan 21) — one implementation of
+ *  "which rows does this filter mean", so a saved view's count can never
+ *  silently disagree with the list it's counting. */
+function trafficWhere(filter: TrafficFilter): { clauses: string[]; params: Record<string, unknown> } {
+  const clauses = ["slug = @slug"];
+  const params: Record<string, unknown> = { slug: filter.slug };
+  if (filter.id) { clauses.push("id = @id"); params.id = filter.id; }
+  if (filter.before) { clauses.push("at < @before"); params.before = filter.before; }
+  if (filter.since) { clauses.push("at > @since"); params.since = filter.since; }
+  if (filter.unmatchedOnly === true) clauses.push("matched_rule_id is null");
+  else if (filter.unmatchedOnly === false) clauses.push("matched_rule_id is not null");
+  if (filter.viaUpstreamOnly === true) clauses.push("via_upstream = 1");
+  if (filter.method) { clauses.push("method = @method"); params.method = filter.method; }
+  if (filter.ruleId) { clauses.push("matched_rule_id = @ruleId"); params.ruleId = filter.ruleId; }
+  if (filter.pathContains) { clauses.push("path like @pathContains"); params.pathContains = `%${filter.pathContains}%`; }
+  if (filter.statusFrom != null) { clauses.push("status >= @statusFrom"); params.statusFrom = filter.statusFrom; }
+  if (filter.statusTo != null) { clauses.push("status <= @statusTo"); params.statusTo = filter.statusTo; }
+  if (filter.durationMsFrom != null) { clauses.push("duration_ms >= @durationMsFrom"); params.durationMsFrom = filter.durationMsFrom; }
+  return { clauses, params };
 }
 
 interface SqliteTrafficRow {

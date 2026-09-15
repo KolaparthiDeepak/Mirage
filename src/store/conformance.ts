@@ -496,6 +496,151 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       const remaining = await s.queryTraffic({ slug, limit: 10 });
       expect(remaining.map((r) => r.id)).toEqual([entries[4]!.id, entries[3]!.id]);
     });
+
+    it("countTraffic matches queryTraffic's row count for the same filter", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-count");
+      await s.recordTraffic(trafficEntry(slug, { method: "GET", status: 200 }));
+      await s.recordTraffic(trafficEntry(slug, { method: "POST", status: 500 }));
+      await s.recordTraffic(trafficEntry(slug, { method: "POST", status: 201 }));
+
+      expect(await s.countTraffic({ slug })).toBe(3);
+      expect(await s.countTraffic({ slug, method: "POST" })).toBe(2);
+      expect(await s.countTraffic({ slug, statusFrom: 500, statusTo: 599 })).toBe(1);
+    });
+
+    it("filters traffic by durationMsFrom for the Slow saved view", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-slow");
+      await s.recordTraffic(trafficEntry(slug, { durationMs: 10 }));
+      const slow = trafficEntry(slug, { durationMs: 900 });
+      await s.recordTraffic(slow);
+
+      const rows = await s.queryTraffic({ slug, durationMsFrom: 500 });
+      expect(rows.map((r) => r.id)).toEqual([slow.id]);
+      expect(await s.countTraffic({ slug, durationMsFrom: 500 })).toBe(1);
+    });
+
+    // --- plan 21: saved views ---
+
+    it("round-trips a saved view and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("view");
+      const now = new Date().toISOString();
+      await s.saveView({ id: "v1", slug, name: "Slow requests", query: { durationMsFrom: 500 }, createdAt: now });
+
+      const back = await s.getView(slug, "v1");
+      expect(back).toMatchObject({ id: "v1", slug, name: "Slow requests", query: { durationMsFrom: 500 } });
+
+      await s.saveView({ id: "v1", slug, name: "Renamed", query: { durationMsFrom: 1000 }, createdAt: now });
+      expect((await s.getView(slug, "v1"))?.name).toBe("Renamed");
+      expect(await s.listViews(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown view and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("view-del");
+      expect(await s.getView(slug, "nope")).toBeNull();
+
+      await s.saveView({ id: "v1", slug, name: "X", query: {}, createdAt: new Date().toISOString() });
+      await s.deleteView(slug, "v1");
+      expect(await s.getView(slug, "v1")).toBeNull();
+    });
+
+    // --- plan 21: alerts ---
+
+    function alertFixture(slug: string, overrides: Partial<Parameters<Store["saveAlert"]>[0]> = {}): Parameters<Store["saveAlert"]>[0] {
+      const now = new Date().toISOString();
+      return {
+        id: randomUUID(),
+        slug,
+        name: "Unmatched spike",
+        view: "unmatched",
+        condition: { kind: "unmatched", gt: 5, windowMinutes: 10 },
+        notify: { webhook: "https://example.com/hook" },
+        cooldownMinutes: 30,
+        enabled: true,
+        lastFiredAt: null,
+        lastRecoveredAt: null,
+        lastError: null,
+        currentlyFiring: false,
+        createdAt: now,
+        updatedAt: now,
+        ...overrides,
+      };
+    }
+
+    it("round-trips an alert and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("alert");
+      const a = alertFixture(slug, { id: "a1" });
+      await s.saveAlert(a);
+
+      const back = await s.getAlert(slug, "a1");
+      expect(back).toMatchObject({ id: "a1", slug, name: "Unmatched spike", view: "unmatched", enabled: true });
+
+      await s.saveAlert({ ...a, name: "Renamed", enabled: false });
+      const updated = await s.getAlert(slug, "a1");
+      expect(updated?.name).toBe("Renamed");
+      expect(updated?.enabled).toBe(false);
+      expect(await s.listAlerts(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown alert and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("alert-del");
+      expect(await s.getAlert(slug, "nope")).toBeNull();
+
+      await s.saveAlert(alertFixture(slug, { id: "a1" }));
+      await s.deleteAlert(slug, "a1");
+      expect(await s.getAlert(slug, "a1")).toBeNull();
+    });
+
+    it("listAllEnabledAlerts returns only enabled alerts, across projects", async () => {
+      const s = await get();
+      const slugA = uniqueSlug("alert-enabled-a");
+      const slugB = uniqueSlug("alert-enabled-b");
+      const enabledA = alertFixture(slugA, { id: "a1", enabled: true });
+      const disabledA = alertFixture(slugA, { id: "a2", enabled: false });
+      const enabledB = alertFixture(slugB, { id: "b1", enabled: true });
+      await s.saveAlert(enabledA);
+      await s.saveAlert(disabledA);
+      await s.saveAlert(enabledB);
+
+      const enabled = await s.listAllEnabledAlerts();
+      const ids = enabled.map((a) => a.id);
+      expect(ids).toEqual(expect.arrayContaining(["a1", "b1"]));
+      expect(ids).not.toContain("a2");
+    });
+
+    it("updateAlertState writes firing/recovery/error state without touching config fields", async () => {
+      const s = await get();
+      const slug = uniqueSlug("alert-state");
+      const a = alertFixture(slug, { id: "a1", name: "Original" });
+      await s.saveAlert(a);
+
+      await s.updateAlertState(slug, "a1", {
+        lastFiredAt: "2026-05-01T00:00:00.000Z",
+        lastRecoveredAt: null,
+        lastError: null,
+        currentlyFiring: true,
+      });
+
+      const fired = await s.getAlert(slug, "a1");
+      expect(fired?.name).toBe("Original");
+      expect(fired?.currentlyFiring).toBe(true);
+      expect(fired?.lastFiredAt).toBe("2026-05-01T00:00:00.000Z");
+
+      await s.updateAlertState(slug, "a1", {
+        lastFiredAt: fired!.lastFiredAt,
+        lastRecoveredAt: "2026-05-01T00:10:00.000Z",
+        lastError: null,
+        currentlyFiring: false,
+      });
+      const recovered = await s.getAlert(slug, "a1");
+      expect(recovered?.currentlyFiring).toBe(false);
+      expect(recovered?.lastRecoveredAt).toBe("2026-05-01T00:10:00.000Z");
+    });
   });
 }
 

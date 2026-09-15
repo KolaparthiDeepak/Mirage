@@ -6,9 +6,11 @@ import type {
   FlowRun,
   ProjectSummary,
   Store,
+  StoredAlert,
   StoredFlow,
   StoredProject,
   StoredRule,
+  StoredView,
   TrafficEntry,
   TrafficFilter,
 } from "./types";
@@ -266,23 +268,39 @@ export class PostgresStore implements Store {
     // order; every other query wants newest-first.
     const order = filter.since ? this.sql`order by at asc` : this.sql`order by at desc`;
     const rows = await this.sql<PgTrafficRow[]>`
-      select * from traffic
-      where slug = ${filter.slug}
-        ${filter.id ? this.sql`and id = ${filter.id}` : this.sql``}
-        ${filter.before ? this.sql`and at < ${filter.before}` : this.sql``}
-        ${filter.since ? this.sql`and at > ${filter.since}` : this.sql``}
-        ${filter.unmatchedOnly === true ? this.sql`and matched_rule_id is null` : this.sql``}
-        ${filter.unmatchedOnly === false ? this.sql`and matched_rule_id is not null` : this.sql``}
-        ${filter.viaUpstreamOnly === true ? this.sql`and via_upstream = true` : this.sql``}
-        ${filter.method ? this.sql`and method = ${filter.method}` : this.sql``}
-        ${filter.ruleId ? this.sql`and matched_rule_id = ${filter.ruleId}` : this.sql``}
-        ${filter.pathContains ? this.sql`and path like ${"%" + filter.pathContains + "%"}` : this.sql``}
-        ${filter.statusFrom != null ? this.sql`and status >= ${filter.statusFrom}` : this.sql``}
-        ${filter.statusTo != null ? this.sql`and status <= ${filter.statusTo}` : this.sql``}
+      select * from traffic where ${this.trafficWhere(filter)}
       ${order}
       limit ${limit}
     `;
     return rows.map(pgRowToTrafficEntry);
+  }
+
+  /** Plan 21 — a saved view's live count badge. */
+  async countTraffic(filter: TrafficFilter): Promise<number> {
+    await this.ready;
+    const rows = await this.sql<{ n: string }[]>`select count(*) as n from traffic where ${this.trafficWhere(filter)}`;
+    return Number(rows[0]!.n);
+  }
+
+  /** One implementation of "which rows does this filter mean", shared by
+   *  queryTraffic and countTraffic — a saved view's count can never silently
+   *  disagree with the list it's counting. */
+  private trafficWhere(filter: TrafficFilter) {
+    return this.sql`
+      slug = ${filter.slug}
+      ${filter.id ? this.sql`and id = ${filter.id}` : this.sql``}
+      ${filter.before ? this.sql`and at < ${filter.before}` : this.sql``}
+      ${filter.since ? this.sql`and at > ${filter.since}` : this.sql``}
+      ${filter.unmatchedOnly === true ? this.sql`and matched_rule_id is null` : this.sql``}
+      ${filter.unmatchedOnly === false ? this.sql`and matched_rule_id is not null` : this.sql``}
+      ${filter.viaUpstreamOnly === true ? this.sql`and via_upstream = true` : this.sql``}
+      ${filter.method ? this.sql`and method = ${filter.method}` : this.sql``}
+      ${filter.ruleId ? this.sql`and matched_rule_id = ${filter.ruleId}` : this.sql``}
+      ${filter.pathContains ? this.sql`and path like ${"%" + filter.pathContains + "%"}` : this.sql``}
+      ${filter.statusFrom != null ? this.sql`and status >= ${filter.statusFrom}` : this.sql``}
+      ${filter.statusTo != null ? this.sql`and status <= ${filter.statusTo}` : this.sql``}
+      ${filter.durationMsFrom != null ? this.sql`and duration_ms >= ${filter.durationMsFrom}` : this.sql``}
+    `;
   }
 
   async pruneTraffic(before: Date, maxRowsPerProject: number): Promise<number> {
@@ -386,6 +404,86 @@ export class PostgresStore implements Store {
     return res.count;
   }
 
+  async saveView(view: StoredView): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into saved_view (id, slug, name, query, created_at)
+      values (${view.id}, ${view.slug}, ${view.name}, ${this.sql.json(toJsonb(view.query))}, ${view.createdAt})
+      on conflict (slug, id) do update set name = excluded.name, query = excluded.query
+    `;
+  }
+
+  async getView(slug: string, id: string): Promise<StoredView | null> {
+    await this.ready;
+    const rows = await this.sql<PgViewRow[]>`select * from saved_view where slug = ${slug} and id = ${id}`;
+    return rows[0] ? pgRowToView(rows[0]) : null;
+  }
+
+  async listViews(slug: string): Promise<StoredView[]> {
+    await this.ready;
+    const rows = await this.sql<PgViewRow[]>`select * from saved_view where slug = ${slug} order by name`;
+    return rows.map(pgRowToView);
+  }
+
+  async deleteView(slug: string, id: string): Promise<void> {
+    await this.ready;
+    await this.sql`delete from saved_view where slug = ${slug} and id = ${id}`;
+  }
+
+  async saveAlert(alert: StoredAlert): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into alert (id, slug, name, view, condition, notify, cooldown_minutes, enabled,
+        last_fired_at, last_recovered_at, last_error, currently_firing, updated_at)
+      values (
+        ${alert.id}, ${alert.slug}, ${alert.name}, ${alert.view},
+        ${this.sql.json(toJsonb(alert.condition))}, ${this.sql.json(toJsonb(alert.notify))},
+        ${alert.cooldownMinutes}, ${alert.enabled},
+        ${alert.lastFiredAt}, ${alert.lastRecoveredAt}, ${alert.lastError}, ${alert.currentlyFiring}, now()
+      )
+      on conflict (slug, id) do update set
+        name = excluded.name, view = excluded.view, condition = excluded.condition, notify = excluded.notify,
+        cooldown_minutes = excluded.cooldown_minutes, enabled = excluded.enabled, updated_at = excluded.updated_at
+    `;
+  }
+
+  async getAlert(slug: string, id: string): Promise<StoredAlert | null> {
+    await this.ready;
+    const rows = await this.sql<PgAlertRow[]>`select * from alert where slug = ${slug} and id = ${id}`;
+    return rows[0] ? pgRowToAlert(rows[0]) : null;
+  }
+
+  async listAlerts(slug: string): Promise<StoredAlert[]> {
+    await this.ready;
+    const rows = await this.sql<PgAlertRow[]>`select * from alert where slug = ${slug} order by name`;
+    return rows.map(pgRowToAlert);
+  }
+
+  async listAllEnabledAlerts(): Promise<StoredAlert[]> {
+    await this.ready;
+    const rows = await this.sql<PgAlertRow[]>`select * from alert where enabled = true`;
+    return rows.map(pgRowToAlert);
+  }
+
+  async deleteAlert(slug: string, id: string): Promise<void> {
+    await this.ready;
+    await this.sql`delete from alert where slug = ${slug} and id = ${id}`;
+  }
+
+  async updateAlertState(
+    slug: string,
+    id: string,
+    state: Pick<StoredAlert, "lastFiredAt" | "lastRecoveredAt" | "lastError" | "currentlyFiring">,
+  ): Promise<void> {
+    await this.ready;
+    await this.sql`
+      update alert set
+        last_fired_at = ${state.lastFiredAt}, last_recovered_at = ${state.lastRecoveredAt},
+        last_error = ${state.lastError}, currently_firing = ${state.currentlyFiring}
+      where slug = ${slug} and id = ${id}
+    `;
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }
@@ -423,6 +521,54 @@ function pgRowToFlowRun(r: PgFlowRunRow): FlowRun {
     finishedAt: r.finished_at ? new Date(r.finished_at).toISOString() : null,
     status: r.status,
     results: r.results,
+  };
+}
+
+interface PgViewRow {
+  id: string;
+  slug: string;
+  name: string;
+  query: StoredView["query"];
+  created_at: string;
+}
+
+function pgRowToView(r: PgViewRow): StoredView {
+  return { id: r.id, slug: r.slug, name: r.name, query: r.query, createdAt: new Date(r.created_at).toISOString() };
+}
+
+interface PgAlertRow {
+  id: string;
+  slug: string;
+  name: string;
+  view: string;
+  condition: StoredAlert["condition"];
+  notify: StoredAlert["notify"];
+  cooldown_minutes: number;
+  enabled: boolean;
+  last_fired_at: string | null;
+  last_recovered_at: string | null;
+  last_error: string | null;
+  currently_firing: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+function pgRowToAlert(r: PgAlertRow): StoredAlert {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    view: r.view,
+    condition: r.condition,
+    notify: r.notify,
+    cooldownMinutes: r.cooldown_minutes,
+    enabled: r.enabled,
+    lastFiredAt: r.last_fired_at ? new Date(r.last_fired_at).toISOString() : null,
+    lastRecoveredAt: r.last_recovered_at ? new Date(r.last_recovered_at).toISOString() : null,
+    lastError: r.last_error,
+    currentlyFiring: r.currently_firing,
+    createdAt: new Date(r.created_at).toISOString(),
+    updatedAt: new Date(r.updated_at).toISOString(),
   };
 }
 

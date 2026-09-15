@@ -97,6 +97,43 @@ export interface ConfigEvent {
 /** The parts a caller supplies; id/at/version are set by the store. */
 export type ConfigEventInput = Omit<ConfigEvent, "id" | "at" | "version">;
 
+/** Plan 21 — a saved traffic filter, pinned to the project's traffic page.
+ *  `query` is a subset of TrafficFilter's shape (validated by
+ *  src/views/schema.ts at the API boundary — opaque here, like a rule's
+ *  `definition`). */
+export interface StoredView {
+  id: string;
+  slug: string;
+  name: string;
+  query: Record<string, unknown>;
+  createdAt: string;
+}
+
+/** Plan 21 — a saved view plus a threshold plus a destination. Evaluation
+ *  state (last fired/recovered/error, currently firing) lives on the same
+ *  row: the cron sweep and the Test button read and write through one
+ *  source of truth, never two. */
+export interface StoredAlert {
+  id: string;
+  slug: string;
+  name: string;
+  /** A built-in view id ("unmatched" | "errors" | "slow") or a StoredView id. */
+  view: string;
+  condition:
+    | { kind: "unmatched"; gt: number; windowMinutes: number }
+    | { kind: "errorRate"; gt: number; windowMinutes: number }
+    | { kind: "silence"; windowMinutes: number };
+  notify: { webhook?: string; slack?: string; discord?: string };
+  cooldownMinutes: number;
+  enabled: boolean;
+  lastFiredAt: string | null;
+  lastRecoveredAt: string | null;
+  lastError: string | null;
+  currentlyFiring: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Plan 16 — a saved flow definition. `definition` is `flowSchema`'s shape. */
 export interface StoredFlow {
   id: string;
@@ -142,6 +179,8 @@ export interface TrafficFilter {
   /** Inclusive status range — e.g. 500/599 for the 5xx class. */
   statusFrom?: number;
   statusTo?: number;
+  /** Plan 21 "Slow" saved view: only rows at or above this duration. */
+  durationMsFrom?: number;
 }
 
 /**
@@ -175,6 +214,30 @@ export interface Store {
   listFlowRuns(slug: string, flowId: string, limit?: number): Promise<FlowRun[]>;
   /** Retention: 30 days, per plan. Returns rows deleted. */
   pruneFlowRuns(before: Date): Promise<number>;
+
+  /** Plan 21 — saved views. */
+  saveView(view: StoredView): Promise<void>;
+  getView(slug: string, id: string): Promise<StoredView | null>;
+  listViews(slug: string): Promise<StoredView[]>;
+  deleteView(slug: string, id: string): Promise<void>;
+
+  /** Plan 21 — alerts. */
+  saveAlert(alert: StoredAlert): Promise<void>;
+  getAlert(slug: string, id: string): Promise<StoredAlert | null>;
+  listAlerts(slug: string): Promise<StoredAlert[]>;
+  /** Every enabled alert across every project — the cron sweep's one query
+   *  of entry, bounded by the 10-per-project cap enforced at save. */
+  listAllEnabledAlerts(): Promise<StoredAlert[]>;
+  deleteAlert(slug: string, id: string): Promise<void>;
+  /** Evaluation-state-only update, so the cron sweep never has to re-supply
+   *  the alert's own config to record a firing. The evaluator always knows
+   *  the full new state, so this takes all four fields rather than a partial
+   *  patch — no "which fields were omitted" ambiguity to get wrong. */
+  updateAlertState(
+    slug: string,
+    id: string,
+    state: Pick<StoredAlert, "lastFiredAt" | "lastRecoveredAt" | "lastError" | "currentlyFiring">,
+  ): Promise<void>;
   deleteProject(slug: string): Promise<void>;
   getConfigVersion(slug: string): Promise<number | null>;
 
@@ -185,6 +248,9 @@ export interface Store {
    *  sites must never await this without a catch. */
   recordTraffic(entry: TrafficEntry): Promise<void>;
   queryTraffic(filter: TrafficFilter): Promise<TrafficEntry[]>;
+  /** Plan 21 — a saved view's live count badge. Same filter shape as
+   *  queryTraffic, an actual COUNT rather than fetching rows to measure them. */
+  countTraffic(filter: TrafficFilter): Promise<number>;
   /** Deletes rows older than `before` OR beyond `maxRowsPerProject` per slug
    *  (keeping the newest), whichever is more aggressive — plan 04: "keeps one
    *  noisy project from evicting a quiet one." Returns the number deleted. */

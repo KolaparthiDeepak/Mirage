@@ -38,6 +38,17 @@ function fakeStore(getProject: Store["getProject"]): Store {
     getFlowRun: async () => null,
     listFlowRuns: async () => [],
     pruneFlowRuns: async () => 0,
+    saveView: async () => {},
+    getView: async () => null,
+    listViews: async () => [],
+    deleteView: async () => {},
+    saveAlert: async () => {},
+    getAlert: async () => null,
+    listAlerts: async () => [],
+    listAllEnabledAlerts: async () => [],
+    deleteAlert: async () => {},
+    updateAlertState: async () => {},
+    countTraffic: async () => 0,
     close: async () => {},
   };
 }
