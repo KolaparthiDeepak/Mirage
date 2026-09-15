@@ -137,6 +137,18 @@ export const contractSchema = z
   })
   .strict();
 
+// Plan 18 — the public docs portal (/d/:slug). Off by default: publishing a
+// project's endpoint shapes is something the owner opts into, never a
+// side effect of creating the project.
+export const docsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Plain text, shown as-is (no markdown parsing) — one field isn't worth
+     *  a markdown+sanitizer dependency. Length-capped against a pathological paste. */
+    description: z.string().max(2000).optional(),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
@@ -146,6 +158,7 @@ export const projectYamlSchema = z
     variables: z.array(projectVariableSchema).optional(),
     defaultEnvironment: z.string().min(1).optional(),
     contract: contractSchema.optional(),
+    docs: docsSchema.optional(),
     // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
     // body. Default true; an existing project with examples throughout is
     // unaffected either way.

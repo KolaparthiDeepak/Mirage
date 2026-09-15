@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectYamlSchema, ruleFileSchema, ruleSchema } from "./schema";
+import { docsSchema, projectYamlSchema, ruleFileSchema, ruleSchema } from "./schema";
 
 describe("projectYamlSchema", () => {
   it("accepts a minimal valid project", () => {
@@ -14,6 +14,19 @@ describe("projectYamlSchema", () => {
   it("normalizes a trailing-slash basePath, and treats \"/\" as no basePath", () => {
     expect(projectYamlSchema.parse({ name: "X", slug: "x", basePath: "/api/" }).basePath).toBe("/api");
     expect(projectYamlSchema.parse({ name: "X", slug: "x", basePath: "/" }).basePath).toBeUndefined();
+  });
+});
+
+describe("docsSchema (plan 18)", () => {
+  it("defaults to disabled", () => {
+    expect(docsSchema.parse({}).enabled).toBe(false);
+  });
+  it("accepts a description within the length cap and rejects past it", () => {
+    expect(docsSchema.safeParse({ enabled: true, description: "hello" }).success).toBe(true);
+    expect(docsSchema.safeParse({ enabled: true, description: "x".repeat(2001) }).success).toBe(false);
+  });
+  it("rejects an unknown key", () => {
+    expect(docsSchema.safeParse({ enabled: true, logo: "x" }).success).toBe(false);
   });
 });
 

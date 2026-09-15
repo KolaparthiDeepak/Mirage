@@ -1,5 +1,5 @@
 import type { Rule } from "../compile/schema";
-import type { ContractConfig, FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
+import type { ContractConfig, DocsConfig, FaultsConfig, MockResponse, ProjectVariable, UpstreamConfig } from "../engine/types";
 
 /** Project metadata as stored — everything compileMocks() would read from
  *  project.yaml, plus the bookkeeping fields the store adds. */
@@ -21,6 +21,8 @@ export interface StoredProjectMeta {
   defaultEnvironment?: string;
   /** Plan 13. */
   contract?: ContractConfig;
+  /** Plan 18. Absent/enabled:false means the /d/:slug docs page 404s. */
+  docs?: DocsConfig;
   configVersion: number;
   updatedAt: string; // ISO-8601
 }

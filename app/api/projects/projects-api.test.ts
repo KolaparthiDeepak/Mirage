@@ -251,6 +251,30 @@ describe("projects write API (plan 03)", () => {
     expect(updated!.basePath).toBe("/api");
   });
 
+  it("PATCH /api/projects/:slug enables and disables the docs portal (plan 18)", async () => {
+    await seedProject("docsme");
+    const { PATCH } = await import("./[slug]/route");
+    const on = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ docs: { enabled: true, description: "Hi" } }) }),
+      ctx({ slug: "docsme" }),
+    );
+    expect(on.status).toBe(200);
+    expect((await store.getProject("docsme"))!.docs).toEqual({ enabled: true, description: "Hi" });
+
+    const rejected = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ docs: { enabled: true, logo: "nope" } }) }),
+      ctx({ slug: "docsme" }),
+    );
+    expect(rejected.status).toBe(400);
+
+    const off = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ docs: null }) }),
+      ctx({ slug: "docsme" }),
+    );
+    expect(off.status).toBe(200);
+    expect((await store.getProject("docsme"))!.docs).toBeUndefined();
+  });
+
   it("PATCH /api/projects/:slug rejects an upstream URL pointing at a private address (plan 07)", async () => {
     await seedProject("ssrf");
     const { PATCH } = await import("./[slug]/route");

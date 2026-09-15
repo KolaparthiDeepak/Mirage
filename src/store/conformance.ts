@@ -127,6 +127,18 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect((await s.getProject(slug))?.contract).toEqual(contract);
     });
 
+    it("round-trips the docs config, off by default (plan 18)", async () => {
+      const s = await get();
+      const withDocs = uniqueSlug("docs-on");
+      const docs = { enabled: true, description: "hello colleagues" };
+      await s.saveProject(project(withDocs, { docs }));
+      expect((await s.getProject(withDocs))?.docs).toEqual(docs);
+
+      const without = uniqueSlug("docs-off");
+      await s.saveProject(project(without));
+      expect((await s.getProject(without))?.docs).toBeUndefined();
+    });
+
     it("writes a config event in the same transaction as the save (plan 15)", async () => {
       const s = await get();
       const slug = uniqueSlug("history");

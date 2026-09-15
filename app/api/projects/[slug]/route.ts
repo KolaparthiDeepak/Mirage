@@ -1,7 +1,7 @@
 // Plan 03: PATCH /api/projects/:slug (name/basePath/defaults), DELETE (requires
 // the client to have the user type the slug to confirm — that's a UI gate;
 // the server just deletes on request).
-import { contractSchema, faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
+import { contractSchema, docsSchema, faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
@@ -43,6 +43,7 @@ export async function PATCH(
     variables?: unknown;
     defaultEnvironment?: string | null;
     contract?: unknown;
+    docs?: unknown;
     ifVersion?: number;
   };
 
@@ -127,6 +128,19 @@ export async function PATCH(
     }
   }
 
+  let docs = project.docs;
+  if ("docs" in parsedBody) {
+    if (parsedBody.docs == null) {
+      docs = undefined;
+    } else {
+      const shape = docsSchema.safeParse(parsedBody.docs);
+      if (!shape.success) {
+        return Response.json({ error: `docs.${shape.error.issues[0]!.path.join(".") || "config"}: ${shape.error.issues[0]!.message}` }, { status: 400 });
+      }
+      docs = shape.data;
+    }
+  }
+
   const merged = {
     ...project,
     name: parsedBody.name ?? project.name,
@@ -137,6 +151,7 @@ export async function PATCH(
     variables,
     defaultEnvironment,
     contract,
+    docs,
   };
   const validated = projectYamlSchema.safeParse({ name: merged.name, slug, basePath: merged.basePath, defaults: merged.defaults });
   if (!validated.success) {
@@ -146,7 +161,7 @@ export async function PATCH(
 
   const metaOf = (p: StoredProject) => ({
     name: p.name, basePath: p.basePath, defaults: p.defaults,
-    upstream: p.upstream, faults: p.faults, contract: p.contract,
+    upstream: p.upstream, faults: p.faults, contract: p.contract, docs: p.docs,
     defaultEnvironment: p.defaultEnvironment,
     variables: (p.variables ?? []).map((v) => (v.secret ? { ...v, value: "***" } : v)),
   });

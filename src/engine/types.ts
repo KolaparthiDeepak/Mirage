@@ -110,6 +110,7 @@ export interface ProjectConfig {
   variables?: ProjectVariable[];         // plan 17
   defaultEnvironment?: string;           // plan 17 — used when x-mirage-env is absent
   contract?: ContractConfig;             // plan 13
+  docs?: DocsConfig;                     // plan 18
 }
 
 /** Plan 13. */
@@ -117,6 +118,13 @@ export interface ContractConfig {
   validate?: boolean;
   enforce: boolean;
   rejectInvalid: boolean;
+}
+
+/** Plan 18 — the public docs portal (/d/:slug). Absent/enabled:false means
+ *  the docs route 404s for anyone. */
+export interface DocsConfig {
+  enabled: boolean;
+  description?: string;
 }
 
 export interface ResolveResult {
