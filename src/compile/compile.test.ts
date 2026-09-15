@@ -15,6 +15,15 @@ describe("compileMocks", () => {
     expect(card.routes[0]!.segments).toHaveLength(2);
     expect(card.defaults.notFound.status).toBe(404);
   });
+  it("carries a project.yaml's drift config through to ProjectConfig (regression: was silently dropped)", async () => {
+    const r = await compileMocks(fx("valid"), "abc123");
+    expect(r.bundle.projects.card!.drift).toEqual({
+      enabled: true,
+      allowUnsafeMethods: false,
+      compareCosmetic: false,
+      schedule: "weekly",
+    });
+  });
   it("stores OpenAPI-generated routes basePath-relative", async () => {
     const r = await compileMocks(fx("valid"), "x");
     const gen = r.bundle.projects.card!.routes.find((x) => x.id.startsWith("openapi:"))!;

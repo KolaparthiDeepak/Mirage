@@ -299,6 +299,7 @@ export async function compileMocks(
       defaultEnvironment: project.defaultEnvironment,
       contract: project.contract,
       docs: project.docs,
+      drift: project.drift,
     };
   }
 
