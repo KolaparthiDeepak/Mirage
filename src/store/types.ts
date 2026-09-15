@@ -95,6 +95,27 @@ export interface ConfigEvent {
 /** The parts a caller supplies; id/at/version are set by the store. */
 export type ConfigEventInput = Omit<ConfigEvent, "id" | "at" | "version">;
 
+/** Plan 16 — a saved flow definition. `definition` is `flowSchema`'s shape. */
+export interface StoredFlow {
+  id: string;
+  slug: string;
+  name: string;
+  definition: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FlowRun {
+  id: string;
+  slug: string;
+  flowId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: "running" | "passed" | "failed" | "error";
+  /** Per-step results — StepResult[] from src/flows/run.ts, opaque to the store. */
+  results: unknown[];
+}
+
 export interface TrafficFilter {
   slug: string;
   /** Exact id — for the detail view and the match-trace endpoint (plan 06). */
@@ -141,6 +162,17 @@ export interface Store {
   /** Retention: keep the newest `keep` per project OR everything since
    *  `since`, whichever is larger. Returns rows deleted. */
   pruneConfigEvents(slug: string, keep: number, since: Date): Promise<number>;
+
+  /** Plan 16 — flows. */
+  saveFlow(flow: StoredFlow): Promise<void>;
+  getFlow(slug: string, id: string): Promise<StoredFlow | null>;
+  listFlows(slug: string): Promise<StoredFlow[]>;
+  deleteFlow(slug: string, id: string): Promise<void>;
+  saveFlowRun(run: FlowRun): Promise<void>;
+  getFlowRun(slug: string, runId: string): Promise<FlowRun | null>;
+  listFlowRuns(slug: string, flowId: string, limit?: number): Promise<FlowRun[]>;
+  /** Retention: 30 days, per plan. Returns rows deleted. */
+  pruneFlowRuns(before: Date): Promise<number>;
   deleteProject(slug: string): Promise<void>;
   getConfigVersion(slug: string): Promise<number | null>;
 

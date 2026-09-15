@@ -3,8 +3,10 @@ import { loadMigrations } from "./migrate";
 import type {
   ConfigEvent,
   ConfigEventInput,
+  FlowRun,
   ProjectSummary,
   Store,
+  StoredFlow,
   StoredProject,
   StoredRule,
   TrafficEntry,
@@ -348,9 +350,113 @@ export class SqliteStore implements Store {
     return this.db.prepare("delete from counter where updated_at < ?").run(cutoff.toISOString()).changes;
   }
 
+  async saveFlow(flow: StoredFlow): Promise<void> {
+    this.db
+      .prepare(
+        `insert into flow (id, slug, name, definition, created_at, updated_at)
+         values (@id, @slug, @name, @definition, @createdAt, @updatedAt)
+         on conflict(slug, id) do update set
+           name = excluded.name, definition = excluded.definition, updated_at = excluded.updated_at`,
+      )
+      .run({
+        id: flow.id,
+        slug: flow.slug,
+        name: flow.name,
+        definition: JSON.stringify(flow.definition),
+        createdAt: flow.createdAt,
+        updatedAt: flow.updatedAt,
+      });
+  }
+
+  async getFlow(slug: string, id: string): Promise<StoredFlow | null> {
+    const row = this.db.prepare("select * from flow where slug = ? and id = ?").get(slug, id) as SqliteFlowRow | undefined;
+    return row ? sqliteRowToFlow(row) : null;
+  }
+
+  async listFlows(slug: string): Promise<StoredFlow[]> {
+    const rows = this.db.prepare("select * from flow where slug = ? order by name").all(slug) as SqliteFlowRow[];
+    return rows.map(sqliteRowToFlow);
+  }
+
+  async deleteFlow(slug: string, id: string): Promise<void> {
+    this.db.prepare("delete from flow where slug = ? and id = ?").run(slug, id);
+  }
+
+  async saveFlowRun(run: FlowRun): Promise<void> {
+    this.db
+      .prepare(
+        `insert into flow_run (id, slug, flow_id, started_at, finished_at, status, results)
+         values (@id, @slug, @flowId, @startedAt, @finishedAt, @status, @results)
+         on conflict(id) do update set
+           finished_at = excluded.finished_at, status = excluded.status, results = excluded.results`,
+      )
+      .run({
+        id: run.id,
+        slug: run.slug,
+        flowId: run.flowId,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        status: run.status,
+        results: JSON.stringify(run.results),
+      });
+  }
+
+  async getFlowRun(slug: string, runId: string): Promise<FlowRun | null> {
+    const row = this.db.prepare("select * from flow_run where slug = ? and id = ?").get(slug, runId) as
+      | SqliteFlowRunRow
+      | undefined;
+    return row ? sqliteRowToFlowRun(row) : null;
+  }
+
+  async listFlowRuns(slug: string, flowId: string, limit = 50): Promise<FlowRun[]> {
+    const rows = this.db
+      .prepare("select * from flow_run where slug = ? and flow_id = ? order by started_at desc limit ?")
+      .all(slug, flowId, limit) as SqliteFlowRunRow[];
+    return rows.map(sqliteRowToFlowRun);
+  }
+
+  async pruneFlowRuns(before: Date): Promise<number> {
+    return this.db.prepare("delete from flow_run where started_at < ?").run(before.toISOString()).changes;
+  }
+
   async close(): Promise<void> {
     this.db.close();
   }
+}
+
+interface SqliteFlowRow {
+  id: string;
+  slug: string;
+  name: string;
+  definition: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function sqliteRowToFlow(r: SqliteFlowRow): StoredFlow {
+  return { id: r.id, slug: r.slug, name: r.name, definition: JSON.parse(r.definition), createdAt: r.created_at, updatedAt: r.updated_at };
+}
+
+interface SqliteFlowRunRow {
+  id: string;
+  slug: string;
+  flow_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: FlowRun["status"];
+  results: string;
+}
+
+function sqliteRowToFlowRun(r: SqliteFlowRunRow): FlowRun {
+  return {
+    id: r.id,
+    slug: r.slug,
+    flowId: r.flow_id,
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
+    status: r.status,
+    results: JSON.parse(r.results),
+  };
 }
 
 interface SqliteTrafficRow {

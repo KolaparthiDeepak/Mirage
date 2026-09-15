@@ -30,6 +30,14 @@ function fakeStore(getProject: Store["getProject"]): Store {
     listConfigEvents: async () => [],
     getConfigEvent: async () => null,
     pruneConfigEvents: async () => 0,
+    saveFlow: async () => {},
+    getFlow: async () => null,
+    listFlows: async () => [],
+    deleteFlow: async () => {},
+    saveFlowRun: async () => {},
+    getFlowRun: async () => null,
+    listFlowRuns: async () => [],
+    pruneFlowRuns: async () => 0,
     close: async () => {},
   };
 }

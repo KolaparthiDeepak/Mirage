@@ -364,6 +364,60 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(back).toEqual(e);
     });
 
+    // --- plan 16: flows ---
+
+    it("round-trips a flow definition and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow");
+      const now = new Date(0).toISOString();
+      await s.saveFlow({ id: "f1", slug, name: "Happy path", definition: { steps: [1] }, createdAt: now, updatedAt: now });
+      const back = await s.getFlow(slug, "f1");
+      expect(back?.name).toBe("Happy path");
+      expect(back?.definition).toEqual({ steps: [1] });
+
+      await s.saveFlow({ id: "f1", slug, name: "Renamed", definition: { steps: [1, 2] }, createdAt: now, updatedAt: now });
+      expect((await s.getFlow(slug, "f1"))?.name).toBe("Renamed");
+      expect(await s.listFlows(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown flow and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow-del");
+      expect(await s.getFlow(slug, "nope")).toBeNull();
+      const now = new Date(0).toISOString();
+      await s.saveFlow({ id: "f1", slug, name: "X", definition: {}, createdAt: now, updatedAt: now });
+      await s.deleteFlow(slug, "f1");
+      expect(await s.getFlow(slug, "f1")).toBeNull();
+    });
+
+    it("round-trips a flow run and lists runs newest-first for one flow", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow-run");
+      const older = { id: crypto.randomUUID(), slug, flowId: "f1", startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:01.000Z", status: "passed" as const, results: [{ name: "s1" }] };
+      const newer = { id: crypto.randomUUID(), slug, flowId: "f1", startedAt: "2026-01-02T00:00:00.000Z", finishedAt: null, status: "running" as const, results: [] };
+      await s.saveFlowRun(older);
+      await s.saveFlowRun(newer);
+      await s.saveFlowRun({ ...newer, id: crypto.randomUUID(), flowId: "other-flow" });
+
+      const runs = await s.listFlowRuns(slug, "f1");
+      expect(runs.map((r) => r.id)).toEqual([newer.id, older.id]);
+
+      const fetched = await s.getFlowRun(slug, older.id);
+      expect(fetched?.results).toEqual([{ name: "s1" }]);
+    });
+
+    it("pruneFlowRuns deletes runs older than the cutoff", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow-run-prune");
+      await s.saveFlowRun({ id: crypto.randomUUID(), slug, flowId: "f1", startedAt: "2020-01-01T00:00:00.000Z", finishedAt: null, status: "passed", results: [] });
+      const recent = { id: crypto.randomUUID(), slug, flowId: "f1", startedAt: new Date().toISOString(), finishedAt: null, status: "passed" as const, results: [] };
+      await s.saveFlowRun(recent);
+
+      const deleted = await s.pruneFlowRuns(new Date("2021-01-01"));
+      expect(deleted).toBeGreaterThanOrEqual(1);
+      expect((await s.listFlowRuns(slug, "f1")).map((r) => r.id)).toEqual([recent.id]);
+    });
+
     it("pruneTraffic deletes rows older than the cutoff and keeps newer ones", async () => {
       const s = await get();
       const slug = uniqueSlug("traffic-prune-age");

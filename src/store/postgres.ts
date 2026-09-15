@@ -3,8 +3,10 @@ import { loadMigrations } from "./migrate";
 import type {
   ConfigEvent,
   ConfigEventInput,
+  FlowRun,
   ProjectSummary,
   Store,
+  StoredFlow,
   StoredProject,
   StoredRule,
   TrafficEntry,
@@ -324,9 +326,101 @@ export class PostgresStore implements Store {
     return res.count;
   }
 
+  async saveFlow(flow: StoredFlow): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into flow (id, slug, name, definition, updated_at)
+      values (${flow.id}, ${flow.slug}, ${flow.name}, ${this.sql.json(toJsonb(flow.definition))}, now())
+      on conflict (slug, id) do update set
+        name = excluded.name, definition = excluded.definition, updated_at = excluded.updated_at
+    `;
+  }
+
+  async getFlow(slug: string, id: string): Promise<StoredFlow | null> {
+    await this.ready;
+    const rows = await this.sql<PgFlowRow[]>`select * from flow where slug = ${slug} and id = ${id}`;
+    return rows[0] ? pgRowToFlow(rows[0]) : null;
+  }
+
+  async listFlows(slug: string): Promise<StoredFlow[]> {
+    await this.ready;
+    const rows = await this.sql<PgFlowRow[]>`select * from flow where slug = ${slug} order by name`;
+    return rows.map(pgRowToFlow);
+  }
+
+  async deleteFlow(slug: string, id: string): Promise<void> {
+    await this.ready;
+    await this.sql`delete from flow where slug = ${slug} and id = ${id}`;
+  }
+
+  async saveFlowRun(run: FlowRun): Promise<void> {
+    await this.ready;
+    await this.sql`
+      insert into flow_run (id, slug, flow_id, started_at, finished_at, status, results)
+      values (${run.id}, ${run.slug}, ${run.flowId}, ${run.startedAt}, ${run.finishedAt}, ${run.status}, ${this.sql.json(toJsonb(run.results))})
+      on conflict (id) do update set
+        finished_at = excluded.finished_at, status = excluded.status, results = excluded.results
+    `;
+  }
+
+  async getFlowRun(slug: string, runId: string): Promise<FlowRun | null> {
+    await this.ready;
+    const rows = await this.sql<PgFlowRunRow[]>`select * from flow_run where slug = ${slug} and id = ${runId}`;
+    return rows[0] ? pgRowToFlowRun(rows[0]) : null;
+  }
+
+  async listFlowRuns(slug: string, flowId: string, limit = 50): Promise<FlowRun[]> {
+    await this.ready;
+    const rows = await this.sql<PgFlowRunRow[]>`
+      select * from flow_run where slug = ${slug} and flow_id = ${flowId} order by started_at desc limit ${limit}
+    `;
+    return rows.map(pgRowToFlowRun);
+  }
+
+  async pruneFlowRuns(before: Date): Promise<number> {
+    await this.ready;
+    const res = await this.sql`delete from flow_run where started_at < ${before.toISOString()}`;
+    return res.count;
+  }
+
   async close(): Promise<void> {
     await this.sql.end();
   }
+}
+
+interface PgFlowRow {
+  id: string;
+  slug: string;
+  name: string;
+  definition: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+function pgRowToFlow(r: PgFlowRow): StoredFlow {
+  return { id: r.id, slug: r.slug, name: r.name, definition: r.definition, createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString() };
+}
+
+interface PgFlowRunRow {
+  id: string;
+  slug: string;
+  flow_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: FlowRun["status"];
+  results: unknown[];
+}
+
+function pgRowToFlowRun(r: PgFlowRunRow): FlowRun {
+  return {
+    id: r.id,
+    slug: r.slug,
+    flowId: r.flow_id,
+    startedAt: new Date(r.started_at).toISOString(),
+    finishedAt: r.finished_at ? new Date(r.finished_at).toISOString() : null,
+    status: r.status,
+    results: r.results,
+  };
 }
 
 interface PgTrafficRow {

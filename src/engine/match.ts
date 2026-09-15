@@ -88,7 +88,10 @@ export function resolveJsonPath(body: unknown, path: string): unknown {
   return cur;
 }
 
-function asString(value: unknown): string | undefined {
+// Exported for src/flows/run.ts (plan 16) — assertions reuse this exact
+// string coercion so "equals" means the same thing whether it's matching a
+// request or asserting on a response.
+export function asString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value === "string") return value;
   return JSON.stringify(value);

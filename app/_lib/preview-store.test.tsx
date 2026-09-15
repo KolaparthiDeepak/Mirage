@@ -41,7 +41,7 @@ describe("preview-store", () => {
   it("rehydrates from existing storage", () => {
     sessionStorage.setItem("mirage-preview", JSON.stringify({
       environments: SEED_ENVIRONMENTS, activeEnvId: SEED_ENVIRONMENTS[0]!.id,
-      variables: [{ id: "x", key: "A", value: "B", scope: "Global" }], scenarios: {}, rulesDraft: {},
+      variables: [{ id: "x", key: "A", value: "B", scope: "Global" }], rulesDraft: {},
     }));
     render(<PreviewProvider><Probe /></PreviewProvider>);
     expect(screen.getByTestId("vars").textContent).toBe("1");

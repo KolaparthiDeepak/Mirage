@@ -8,7 +8,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   endpoints: "Endpoints",
   cases: "Cases",
   rules: "Rules",
-  scenarios: "Scenarios",
+  flows: "Flows",
   environments: "Environments",
   variables: "Variables",
   settings: "Settings",
