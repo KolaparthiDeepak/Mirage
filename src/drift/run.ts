@@ -2,7 +2,10 @@
 // eligible rule sequentially (never parallel — the plan's own safety rule),
 // then the spec diff if configured. Each rule's report is upserted or
 // cleared independently, so one rule's failure never blocks another's.
-import { toRoute } from "../compile/compile";
+// Imported from to-route.ts directly, not from ../compile/compile: that
+// file also pulls in @apidevtools/swagger-parser (via expandOpenApi), which
+// this module must never depend on — see to-route.ts's own comment for why.
+import { toRoute } from "../compile/to-route";
 import { probeRule } from "./probe";
 import { compareSpecs, fetchUpstreamSpec } from "./spec-diff";
 import type { DriftFinding } from "./types";

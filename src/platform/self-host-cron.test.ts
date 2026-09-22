@@ -4,7 +4,7 @@ const sweepAllAlertsMock = vi.fn(async () => [] as Array<{ firing: boolean }>);
 const sweepAllDriftMock = vi.fn(async () => [] as Array<{ findingsCount: number }>);
 vi.mock("../alerts/evaluate", () => ({ sweepAllAlerts: () => sweepAllAlertsMock() }));
 vi.mock("../drift/run", () => ({ sweepAllDrift: () => sweepAllDriftMock() }));
-vi.mock("../store/runtime-source", () => ({ getRuntimeStore: async () => ({}) }));
+vi.mock("../store/runtime-store", () => ({ getRuntimeStore: async () => ({}) }));
 
 import { startSelfHostCron, __resetSelfHostCron } from "./self-host-cron";
 

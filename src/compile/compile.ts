@@ -7,6 +7,9 @@ import { parseTemplate, TemplateError } from "../engine/template";
 import type { MockResponse, ProjectConfig, Route } from "../engine/types";
 import { expandOpenApi } from "../openapi/expand";
 import { projectYamlSchema, ruleFileSchema, type Rule } from "./schema";
+import { toRoute } from "./to-route";
+
+export { toRoute } from "./to-route";
 
 export interface CompiledBundle {
   builtAt: string;
@@ -108,23 +111,6 @@ export function assertResponseValid(resp: MockResponse): void {
 
 // Exported so the store's config-cache (plan 02) can compile a stored rule the
 // same way a file-defined one is compiled — one conversion, not two.
-export function toRoute(rule: Rule): Route {
-  // Plan 10: a variant rule's default (and the value every resolve()-path
-  // reader sees) is variant[0]. The state layer overrides it per session.
-  const response = rule.response ?? rule.responses!.variants[0]!;
-  return {
-    id: rule.id,
-    method: rule.request.method,
-    path: rule.request.path,
-    segments: compileSegments(rule.request.path),
-    match: rule.request.match as Route["match"],
-    response,
-    responses: rule.responses,
-    callback: rule.callback as Route["callback"],
-    drift: rule.drift,
-  };
-}
-
 function detectDeadRules(routes: Route[], warnings: string[]): void {
   // Only rules with no match conditions can shadow: a conditional rule may decline.
   const unconditional: Route[] = [];

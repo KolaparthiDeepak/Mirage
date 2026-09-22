@@ -13,7 +13,11 @@
 // file's internals are the only thing that has to change.
 import { sweepAllAlerts } from "../alerts/evaluate";
 import { sweepAllDrift } from "../drift/run";
-import { getRuntimeStore } from "../store/runtime-source";
+// From runtime-store.ts directly, not runtime-source.ts: that file's files
+// mode reaches @apidevtools/swagger-parser via the compiler, which this
+// module (reached from instrumentation.ts) must never touch — see
+// runtime-store.ts's own comment.
+import { getRuntimeStore } from "../store/runtime-store";
 import { selfHostAfter } from "./after";
 
 const DEFAULT_INTERVAL_MS = 5 * 60_000;
