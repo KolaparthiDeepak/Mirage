@@ -96,6 +96,11 @@ docker run -p 3000:3000 -v ./mocks:/mocks:ro -e MIRAGE_MOCKS_DIR=/mocks mirage  
   21) and drift checks (plan 22) every 5 minutes (`MIRAGE_SELF_HOST_CRON_INTERVAL_MS` to change
   that), via `instrumentation.ts` — the closest thing to Vercel Cron a single long-lived
   container has.
+- `npm run backup -- /data/mirage.db /backups/mirage-$(date +%F).db` snapshots the live database
+  (WAL-consistent, via better-sqlite3's own online backup API — safe while the server keeps
+  writing to it). `npm run restore -- <backup> /data/mirage.db` restores one. Both are thin
+  wrappers around `src/store/backup.ts`, which has its own test that runs the actual drill —
+  write data, back up, destroy the original, restore, verify — on every commit.
 
 ## Deferred
 

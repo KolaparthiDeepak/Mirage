@@ -9,6 +9,8 @@ import { computeFaults, faultRng, mangleBody, type FaultOutcome } from "@/src/fa
 import { deliverCallback, type CallbackContext } from "@/src/callbacks/deliver";
 import { checkRequestAgainstSpec } from "@/src/contract/request-check";
 import { clientHash, clientIp } from "@/src/store/client-hash";
+import { allowMockRequest } from "@/src/observability/abuse-guard";
+import { logMockEvent } from "@/src/observability/log";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
 import { shouldRecord, truncateBody } from "@/src/store/traffic-limits";
@@ -50,6 +52,23 @@ async function recordTrafficEntry(entry: TrafficEntry): Promise<void> {
 
 async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }): Promise<Response> {
   const startedAt = Date.now();
+  // Plan 24: one id per inbound request, reused as this request's traffic
+  // row id and returned as x-mirage-request-id — the thing that makes "a
+  // user's report traceable to its traffic row and its logs" true. A
+  // callback's own outbound attempts (below) get their own ids: those are
+  // separate events, not this request.
+  const requestId = randomUUID();
+
+  // Plan 24: the one fully public, unauthenticated endpoint in this
+  // product gets a per-IP abuse guard, before any real work (including the
+  // store round-trip getCurrentConfig can make) — a rate-limited request
+  // should cost as little as possible to reject.
+  const ip = clientIp(req.headers);
+  const clientKey = ip && clientHash(ip);
+  if (clientKey && !allowMockRequest(clientKey)) {
+    return json(429, { error: "rate limit exceeded" }, { "access-control-allow-origin": "*" });
+  }
+
   const { slug: parts } = await ctx.params;
   const slug = parts[0]!;
   const subPath = "/" + parts.slice(1).join("/");
@@ -162,7 +181,12 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       return json(429, { error: "upstream rate limit exceeded for this project", slug }, cors);
     }
 
-    const resHeaders: Record<string, string> = { ...outcome.response.headers, ...cors, "x-mock-matched": "false" };
+    const resHeaders: Record<string, string> = {
+      ...outcome.response.headers,
+      ...cors,
+      "x-mock-matched": "false",
+      "x-mirage-request-id": requestId,
+    };
     const rec = outcome.record;
     if (rec && shouldRecord(slug, rec.status, false)) {
       try {
@@ -170,7 +194,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
         const resBody = truncateBody(redactBody(rec.bodyText));
         after(() =>
           recordTrafficEntry({
-            id: randomUUID(),
+            id: requestId,
             slug,
             at: new Date(startedAt).toISOString(),
             method: req.method,
@@ -196,10 +220,17 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       }
     }
 
-    console.log(JSON.stringify({
-      t: new Date().toISOString(), proj: slug, m: req.method, path: subPath,
-      rule: null, status: outcome.response.status, matched: false, upstream: true,
-    }));
+    logMockEvent({
+      requestId,
+      project: slug,
+      method: req.method,
+      path: subPath,
+      rule: null,
+      status: outcome.response.status,
+      matched: false,
+      warnings: 0,
+      viaUpstream: true,
+    });
     return new Response(outcome.response.bodyText, { status: outcome.response.status, headers: resHeaders });
   }
 
@@ -233,16 +264,16 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     await new Promise((r) => setTimeout(r, totalDelayMs));
   }
 
-  console.log(JSON.stringify({
-    t: new Date().toISOString(),
-    proj: slug,
-    m: req.method,
+  logMockEvent({
+    requestId,
+    project: slug,
+    method: req.method,
     path: subPath,
     rule: result.matchedRuleId,
     status: result.status,
     matched: result.matchedRuleId !== null,
-    warns: result.warnings.length,
-  }));
+    warnings: result.warnings.length,
+  });
 
   const headers: Record<string, string> = {
     ...result.headers,
@@ -251,6 +282,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     ...(faultOutcome && faultOutcome.notes.length > 0 ? { "x-mirage-fault": faultOutcome.notes.join("; ") } : {}),
     "x-mock-rule-id": result.matchedRuleId ?? "",
     "x-mock-matched": String(result.matchedRuleId !== null),
+    "x-mirage-request-id": requestId,
   };
   let payload: BodyInit | null;
   let resBodyText: string | null;
@@ -294,7 +326,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       const resBody = truncateBody(redactBody(resBodyText));
       after(() =>
         recordTrafficEntry({
-          id: randomUUID(),
+          id: requestId,
           slug,
           at: new Date(startedAt).toISOString(),
           method: req.method,

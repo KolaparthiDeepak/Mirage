@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearConfigCache, getConfig, invalidateConfig } from "./config-cache";
+import { clearConfigCache, getCacheStats, getConfig, invalidateConfig } from "./config-cache";
 import type { Store, StoredProject } from "./types";
 
 function stubProject(name: string): StoredProject {
@@ -131,5 +131,19 @@ describe("config-cache", () => {
     const getProject = vi.fn<Store["getProject"]>().mockRejectedValue(new Error("connection refused"));
     const store = fakeStore(getProject);
     await expect(getConfig(store, "p")).rejects.toThrow("connection refused");
+  });
+
+  it("getCacheStats tracks hits/misses across reads (plan 24)", async () => {
+    const getProject = vi.fn(async () => stubProject("v1"));
+    const store = fakeStore(getProject);
+
+    expect(getCacheStats()).toEqual({ hits: 0, misses: 0, hitRate: null, size: 0 });
+
+    await getConfig(store, "p"); // miss: nothing cached yet
+    await getConfig(store, "p"); // hit: still within TTL
+    await getConfig(store, "p"); // hit
+
+    const stats = getCacheStats();
+    expect(stats).toEqual({ hits: 2, misses: 1, hitRate: 2 / 3, size: 1 });
   });
 });

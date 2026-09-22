@@ -16,6 +16,24 @@ interface CacheEntry {
 // touch it, so nothing outside this file can bypass the staleness rule.
 const cache = new Map<string, CacheEntry>();
 
+// Plan 24 — /__mock/health's cache-hit-rate field. Counts only, reset on
+// process restart same as the cache itself; not persisted, not meant to be
+// exact across instances, just a signal an operator can watch.
+let hits = 0;
+let misses = 0;
+
+export interface CacheStats {
+  hits: number;
+  misses: number;
+  hitRate: number | null;
+  size: number;
+}
+
+export function getCacheStats(): CacheStats {
+  const total = hits + misses;
+  return { hits, misses, hitRate: total === 0 ? null : hits / total, size: cache.size };
+}
+
 export function compileStoredProject(stored: StoredProject): ProjectConfig {
   return {
     name: stored.name,
@@ -54,7 +72,11 @@ export interface ConfigResult {
 export async function getConfig(store: Store, slug: string): Promise<ConfigResult | null> {
   const now = Date.now();
   const hit = cache.get(slug);
-  if (hit && now - hit.at < TTL_MS) return { config: hit.config, version: hit.version };
+  if (hit && now - hit.at < TTL_MS) {
+    hits += 1;
+    return { config: hit.config, version: hit.version };
+  }
+  misses += 1;
 
   let stored: StoredProject | null;
   try {
@@ -87,4 +109,6 @@ export function invalidateConfig(slug: string): void {
 /** Test-only: force every entry stale regardless of TTL. */
 export function clearConfigCache(): void {
   cache.clear();
+  hits = 0;
+  misses = 0;
 }
