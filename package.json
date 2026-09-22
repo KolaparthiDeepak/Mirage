@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=20"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "compile": "tsx scripts/compile-cli.ts",
     "postinstall": "tsx scripts/compile-cli.ts || true",

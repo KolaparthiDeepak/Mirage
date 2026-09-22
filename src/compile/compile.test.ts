@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolve as pathResolve } from "node:path";
-import { compileMocks } from "./compile";
+import { compileMocks, compileProjectDir } from "./compile";
 
 const fx = (name: string) => pathResolve(__dirname, "__fixtures__", name);
 
@@ -41,6 +41,17 @@ describe("compileMocks", () => {
     expect(r.bundle.projects.svc!.routes.find((x) => x.id === "openapi:getCard")!.path)
       .toBe("/acropolis/GET_CARD/v1");
     expect(r.warnings.join("\n")).toMatch(/openapi:ping.*outside basePath/i);
+  });
+  it("compileProjectDir compiles the same single project compileMocks would (plan 19: the CLI's own entry point)", async () => {
+    const viaMocks = await compileMocks(fx("valid"), "x");
+    const viaProjectDir = await compileProjectDir(fx("valid"), "card");
+    expect(viaProjectDir.errors).toEqual([]);
+    expect(viaProjectDir.config).toEqual(viaMocks.bundle.projects.card);
+  });
+  it("compileProjectDir returns config: null with an error for a directory that isn't a project", async () => {
+    const r = await compileProjectDir(fx("valid"), "does-not-exist");
+    expect(r.config).toBeNull();
+    expect(r.errors.join("\n")).toMatch(/missing project\.yaml/);
   });
   it("errors when slug does not equal the directory name", async () => {
     const r = await compileMocks(fx("bad-slug"));

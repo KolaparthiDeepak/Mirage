@@ -148,6 +148,167 @@ function detectDeadRules(routes: Route[], warnings: string[]): void {
   }
 }
 
+export interface CompileProjectDirResult {
+  /** null when the directory couldn't even be parsed into a project (errors
+   *  explains why) — never a half-built ProjectConfig. */
+  config: ProjectConfig | null;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Compiles exactly one project directory (`project.yaml` + its rule files +
+ * its `openapi/` dir) into a ProjectConfig. Extracted out of compileMocks so
+ * a single-project caller — the CLI (plan 19), which watches and recompiles
+ * one directory at a time on file save — doesn't have to re-walk every other
+ * project's directory just to get one project's config. One implementation,
+ * two callers: compileMocks below, and `mirage dev`/`mirage validate`.
+ */
+export async function compileProjectDir(
+  mocksDir: string,
+  dirName: string,
+  overlayFiles: Record<string, string> = {},
+): Promise<CompileProjectDirResult> {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const dir = join(mocksDir, dirName);
+
+  let rawProject: string;
+  try {
+    rawProject = readFileSync(join(dir, "project.yaml"), "utf8");
+  } catch (e) {
+    errors.push(isEnoent(e) ? `${dirName}/: missing project.yaml` : `${dirName}/project.yaml: unreadable: ${(e as Error).message}`);
+    return { config: null, errors, warnings };
+  }
+
+  let project;
+  try {
+    project = projectYamlSchema.parse(parseYaml(rawProject));
+  } catch (e) {
+    errors.push(`${dirName}/project.yaml: ${fmtErr(e)}`);
+    return { config: null, errors, warnings };
+  }
+
+  if (project.slug !== dirName) {
+    errors.push(`${dirName}/project.yaml: slug "${project.slug}" does not match directory name "${dirName}"`);
+    return { config: null, errors, warnings };
+  }
+
+  const routes: Route[] = [];
+  const ruleFiles: Array<{ label: string; raw: string }> = [];
+  for (const f of walkRuleFiles(dir)) {
+    try {
+      ruleFiles.push({ label: f, raw: readFileSync(f, "utf8") });
+    } catch {
+      errors.push(`${f}: unreadable`);
+    }
+  }
+  for (const [rel, raw] of Object.entries(overlayFiles)) {
+    if (rel.startsWith(dirName + "/")) ruleFiles.push({ label: rel, raw });
+  }
+
+  for (const { label, raw } of ruleFiles) {
+    let rules: Rule[];
+    try {
+      rules = ruleFileSchema.parse(parseYaml(raw) ?? []);
+    } catch (e) {
+      errors.push(`${label}: ${fmtErr(e)}`);
+      continue;
+    }
+    for (const rule of rules) {
+      if (rule.request.path.startsWith("/__")) {
+        errors.push(`${label}: rule "${rule.id}" uses reserved path prefix "/__"`);
+        continue;
+      }
+      try {
+        for (const resp of rule.response ? [rule.response] : rule.responses!.variants) {
+          assertResponseValid(resp);
+        }
+      } catch (e) {
+        if (e instanceof TemplateError) { errors.push(`${label}: rule "${rule.id}": ${e.message}`); continue; }
+        throw e;
+      }
+      routes.push(toRoute(rule));
+    }
+  }
+
+  let mergedDoc: unknown;
+  const openapiDir = join(dir, "openapi");
+  let oaFiles: string[] = [];
+  try {
+    oaFiles = readdirSync(openapiDir)
+      .filter((f) => f.endsWith(".yaml") || f.endsWith(".yml") || f.endsWith(".json"))
+      .sort();
+  } catch { /* no openapi/ dir */ }
+  for (const f of oaFiles) {
+    const full = join(openapiDir, f);
+    try {
+      const res = await expandOpenApi(full, { fakeFromSchema: project.fakeFromSchema });
+      const bp = project.basePath;
+      let kept = 0;
+      for (const r of res.routes) {
+        let route = r;
+        if (bp) {
+          // resolve.ts strips basePath BEFORE matching, so stored route paths must be basePath-relative.
+          if (r.path === bp || r.path.startsWith(bp + "/")) {
+            const rel = r.path.slice(bp.length) || "/";
+            route = { ...r, path: rel, segments: compileSegments(rel) };
+          } else {
+            warnings.push(`${dirName}/openapi/${f}: generated route "${r.id}" path "${r.path}" is outside basePath "${bp}" and will not be reachable`);
+            continue;
+          }
+        }
+        if (route.path.startsWith("/__")) { errors.push(`${full}: generated route "${route.id}" hits reserved path "/__"`); continue; }
+        routes.push(route); // AFTER hand-written -> first-match-wins => hand-written overrides
+        kept++;
+      }
+      // Every path falling outside basePath used to be warnings-only, so an
+      // OpenAPI import could contribute nothing and still ship.
+      if (res.routes.length > 0 && kept === 0) {
+        errors.push(
+          `${full}: contributed no routes — every path is outside basePath "${bp}". ` +
+            `OpenAPI paths must include the base path; do not put it in servers[].url only.`,
+        );
+      }
+      for (const w of res.warnings) warnings.push(`${dirName}/openapi/${f}: ${w}`);
+      mergedDoc = mergeOpenApiDocs(mergedDoc, res.mergedDoc, full, errors);
+    } catch (e) {
+      errors.push(`${full}: ${(e as Error).message}`);
+    }
+  }
+
+  const seenIds = new Set<string>();
+  for (const r of routes) {
+    if (seenIds.has(r.id)) errors.push(`duplicate rule id "${r.id}" in project "${project.slug}"`);
+    seenIds.add(r.id);
+  }
+
+  detectDeadRules(routes, warnings);
+
+  const config: ProjectConfig = {
+    name: project.name,
+    slug: project.slug,
+    basePath: project.basePath,
+    defaults: {
+      delayMs: project.defaults?.delayMs ?? 0,
+      cors: project.defaults?.cors ?? true,
+      notFound: project.defaults?.notFound ?? DEFAULT_NOT_FOUND,
+    },
+    routes,
+    openApiDoc: mergedDoc,
+    // Plan 07 / 11 / 17 / 13 / 18 / 22: carried through from project.yaml.
+    upstream: project.upstream,
+    faults: project.faults,
+    variables: project.variables,
+    defaultEnvironment: project.defaultEnvironment,
+    contract: project.contract,
+    docs: project.docs,
+    drift: project.drift,
+  };
+
+  return { config, errors, warnings };
+}
+
 export async function compileMocks(
   mocksDir: string,
   commit = "dev",
@@ -168,139 +329,10 @@ export async function compileMocks(
   }
 
   for (const dirName of projectDirs) {
-    const dir = join(mocksDir, dirName);
-    let rawProject: string;
-    try {
-      rawProject = readFileSync(join(dir, "project.yaml"), "utf8");
-    } catch (e) {
-      errors.push(isEnoent(e) ? `${dirName}/: missing project.yaml` : `${dirName}/project.yaml: unreadable: ${(e as Error).message}`);
-      continue;
-    }
-
-    let project;
-    try {
-      project = projectYamlSchema.parse(parseYaml(rawProject));
-    } catch (e) {
-      errors.push(`${dirName}/project.yaml: ${fmtErr(e)}`);
-      continue;
-    }
-
-    if (project.slug !== dirName) {
-      errors.push(`${dirName}/project.yaml: slug "${project.slug}" does not match directory name "${dirName}"`);
-      continue;
-    }
-
-    const routes: Route[] = [];
-    const ruleFiles: Array<{ label: string; raw: string }> = [];
-    for (const f of walkRuleFiles(dir)) {
-      try {
-        ruleFiles.push({ label: f, raw: readFileSync(f, "utf8") });
-      } catch {
-        errors.push(`${f}: unreadable`);
-      }
-    }
-    for (const [rel, raw] of Object.entries(overlayFiles)) {
-      if (rel.startsWith(dirName + "/")) ruleFiles.push({ label: rel, raw });
-    }
-
-    for (const { label, raw } of ruleFiles) {
-      let rules: Rule[];
-      try {
-        rules = ruleFileSchema.parse(parseYaml(raw) ?? []);
-      } catch (e) {
-        errors.push(`${label}: ${fmtErr(e)}`);
-        continue;
-      }
-      for (const rule of rules) {
-        if (rule.request.path.startsWith("/__")) {
-          errors.push(`${label}: rule "${rule.id}" uses reserved path prefix "/__"`);
-          continue;
-        }
-        try {
-          for (const resp of rule.response ? [rule.response] : rule.responses!.variants) {
-            assertResponseValid(resp);
-          }
-        } catch (e) {
-          if (e instanceof TemplateError) { errors.push(`${label}: rule "${rule.id}": ${e.message}`); continue; }
-          throw e;
-        }
-        routes.push(toRoute(rule));
-      }
-    }
-
-    let mergedDoc: unknown;
-    const openapiDir = join(dir, "openapi");
-    let oaFiles: string[] = [];
-    try {
-      oaFiles = readdirSync(openapiDir)
-        .filter((f) => f.endsWith(".yaml") || f.endsWith(".yml") || f.endsWith(".json"))
-        .sort();
-    } catch { /* no openapi/ dir */ }
-    for (const f of oaFiles) {
-      const full = join(openapiDir, f);
-      try {
-        const res = await expandOpenApi(full, { fakeFromSchema: project.fakeFromSchema });
-        const bp = project.basePath;
-        let kept = 0;
-        for (const r of res.routes) {
-          let route = r;
-          if (bp) {
-            // resolve.ts strips basePath BEFORE matching, so stored route paths must be basePath-relative.
-            if (r.path === bp || r.path.startsWith(bp + "/")) {
-              const rel = r.path.slice(bp.length) || "/";
-              route = { ...r, path: rel, segments: compileSegments(rel) };
-            } else {
-              warnings.push(`${dirName}/openapi/${f}: generated route "${r.id}" path "${r.path}" is outside basePath "${bp}" and will not be reachable`);
-              continue;
-            }
-          }
-          if (route.path.startsWith("/__")) { errors.push(`${full}: generated route "${route.id}" hits reserved path "/__"`); continue; }
-          routes.push(route); // AFTER hand-written -> first-match-wins => hand-written overrides
-          kept++;
-        }
-        // Every path falling outside basePath used to be warnings-only, so an
-        // OpenAPI import could contribute nothing and still ship.
-        if (res.routes.length > 0 && kept === 0) {
-          errors.push(
-            `${full}: contributed no routes — every path is outside basePath "${bp}". ` +
-              `OpenAPI paths must include the base path; do not put it in servers[].url only.`,
-          );
-        }
-        for (const w of res.warnings) warnings.push(`${dirName}/openapi/${f}: ${w}`);
-        mergedDoc = mergeOpenApiDocs(mergedDoc, res.mergedDoc, full, errors);
-      } catch (e) {
-        errors.push(`${full}: ${(e as Error).message}`);
-      }
-    }
-
-    const seenIds = new Set<string>();
-    for (const r of routes) {
-      if (seenIds.has(r.id)) errors.push(`duplicate rule id "${r.id}" in project "${project.slug}"`);
-      seenIds.add(r.id);
-    }
-
-    detectDeadRules(routes, warnings);
-
-    projects[project.slug] = {
-      name: project.name,
-      slug: project.slug,
-      basePath: project.basePath,
-      defaults: {
-        delayMs: project.defaults?.delayMs ?? 0,
-        cors: project.defaults?.cors ?? true,
-        notFound: project.defaults?.notFound ?? DEFAULT_NOT_FOUND,
-      },
-      routes,
-      openApiDoc: mergedDoc,
-      // Plan 07 / 11 / 17: carried through from project.yaml.
-      upstream: project.upstream,
-      faults: project.faults,
-      variables: project.variables,
-      defaultEnvironment: project.defaultEnvironment,
-      contract: project.contract,
-      docs: project.docs,
-      drift: project.drift,
-    };
+    const result = await compileProjectDir(mocksDir, dirName, overlayFiles);
+    errors.push(...result.errors);
+    warnings.push(...result.warnings);
+    if (result.config) projects[result.config.slug] = result.config;
   }
 
   return {
