@@ -106,3 +106,24 @@ export async function runDriftCheck(store: Store, project: StoredProject): Promi
 
   return summary;
 }
+
+export interface ProjectDriftSweepOutcome extends DriftCheckSummary {
+  slug: string;
+}
+
+/** Sweeps every project whose drift config is enabled and whose schedule
+ *  isn't "manual". Extracted so the HTTP cron route (plan 22,
+ *  app/api/cron/drift) and the self-host in-process scheduler (plan 20)
+ *  share one implementation rather than two that could drift — the only
+ *  difference between them is what triggers this call. */
+export async function sweepAllDrift(store: Store): Promise<ProjectDriftSweepOutcome[]> {
+  const summaries = await store.listProjects();
+  const results: ProjectDriftSweepOutcome[] = [];
+  for (const summary of summaries) {
+    const project = await store.getProject(summary.slug);
+    if (!project?.drift?.enabled || project.drift.schedule === "manual") continue;
+    const outcome = await runDriftCheck(store, project);
+    results.push({ slug: project.slug, ...outcome });
+  }
+  return results;
+}

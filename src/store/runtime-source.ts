@@ -18,8 +18,13 @@ import type { ConfigResult } from "./config-cache";
 
 const bundle = bundleJson as unknown as CompiledBundle;
 
-export function configSource(): "store" | "bundle" {
-  return process.env.MIRAGE_CONFIG_SOURCE === "store" ? "store" : "bundle";
+export function configSource(): "store" | "bundle" | "files" {
+  if (process.env.MIRAGE_CONFIG_SOURCE === "store") return "store";
+  // Plan 20 — self-host CI mode: MIRAGE_MOCKS_DIR without MIRAGE_CONFIG_SOURCE=files
+  // set would silently do nothing, which is a worse failure mode than
+  // inferring the mode from the one env var that only ever makes sense here.
+  if (process.env.MIRAGE_CONFIG_SOURCE === "files" || process.env.MIRAGE_MOCKS_DIR) return "files";
+  return "bundle";
 }
 
 let lazyStore: Store | undefined;
@@ -50,9 +55,19 @@ export interface CurrentConfig {
  *  right now" — used by the mock route and by the match-trace endpoint (plan
  *  06), so they can never disagree about which project a slug names. */
 export async function getCurrentConfig(slug: string): Promise<CurrentConfig | undefined> {
-  if (configSource() === "store") {
+  const source = configSource();
+  if (source === "store") {
     const result = await getStoreConfig(slug);
     return result ? { config: result.config, configVersion: result.version } : undefined;
+  }
+  if (source === "files") {
+    // Dynamic import for the same reason createStore() is (see the top of
+    // this file): compileMocks pulls in @apidevtools/swagger-parser, which
+    // has no business loading into a deploy that never sets MIRAGE_MOCKS_DIR.
+    const { getFilesBundle } = await import("./files-source");
+    const filesBundle = await getFilesBundle(process.env.MIRAGE_MOCKS_DIR ?? "mocks");
+    const config = filesBundle.projects[slug];
+    return config ? { config, configVersion: null } : undefined;
   }
   const config = bundle.projects[slug];
   return config ? { config, configVersion: null } : undefined;

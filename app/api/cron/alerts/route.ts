@@ -4,7 +4,7 @@
 // whatever schedule you like (an external cron hitting this URL works fine).
 // Gated by the same MIRAGE_ADMIN_TOKEN as every other write endpoint rather
 // than inventing a second secret — a cron caller is just another admin.
-import { sweepAlert } from "@/src/alerts/evaluate";
+import { sweepAllAlerts } from "@/src/alerts/evaluate";
 import { getRuntimeStore } from "@/src/store/runtime-source";
 import { checkAdminAuth } from "../../_lib/admin-auth";
 
@@ -13,9 +13,7 @@ async function handleSweep(req: Request): Promise<Response> {
   if (authError) return authError;
 
   const store = await getRuntimeStore();
-  const alerts = await store.listAllEnabledAlerts();
-  const now = new Date();
-  const results = await Promise.all(alerts.map((alert) => sweepAlert(store, alert, now)));
+  const results = await sweepAllAlerts(store);
 
   return Response.json({ evaluated: results.length, firing: results.filter((r) => r.firing).length, results });
 }

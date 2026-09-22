@@ -101,3 +101,12 @@ export async function sweepAlert(store: Store, alert: StoredAlert, now: Date = n
   });
   return { alertId: alert.id, slug: alert.slug, firing: true, notified: notified.ok, error: notified.ok ? undefined : notified.error };
 }
+
+/** Sweeps every enabled alert across every project. Extracted so the HTTP
+ *  cron route (plan 21, app/api/cron/alerts) and the self-host in-process
+ *  scheduler (plan 20) share one implementation rather than two that could
+ *  drift — the only difference between them is what triggers this call. */
+export async function sweepAllAlerts(store: Store, now: Date = new Date()): Promise<SweepOutcome[]> {
+  const alerts = await store.listAllEnabledAlerts();
+  return Promise.all(alerts.map((alert) => sweepAlert(store, alert, now)));
+}
