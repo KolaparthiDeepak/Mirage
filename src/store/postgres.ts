@@ -110,7 +110,15 @@ export class PostgresStore implements Store {
   private ready: Promise<void>;
 
   constructor(connectionString: string) {
-    this.sql = postgres(connectionString, { max: 5 });
+    // Real bug, caught before the first real Supabase deploy: Supavisor's
+    // transaction-mode pooler can route each statement in a "session" to a
+    // different backend connection, and postgres.js's prepared statements
+    // (its default) don't survive that — intermittent "prepared statement
+    // already exists" / "prepared statement does not exist" errors under
+    // real concurrent load, the kind that never shows up against a direct,
+    // unpooled connection in local testing. `prepare: false` is Supabase's
+    // own documented fix and is always safe against a direct connection too.
+    this.sql = postgres(connectionString, { max: 5, prepare: false });
     this.ready = this.runMigrations();
   }
 
