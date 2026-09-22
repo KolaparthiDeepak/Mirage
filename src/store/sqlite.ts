@@ -1,4 +1,6 @@
 import Database from "better-sqlite3";
+import { existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { loadMigrations } from "./migrate";
 import type {
   ConfigEvent,
@@ -101,6 +103,14 @@ export class SqliteStore implements Store {
   private db: Database.Database;
 
   constructor(path: string) {
+    // Real bug, hit on every fresh checkout: better-sqlite3 refuses to open
+    // a file whose parent directory doesn't exist, and nothing created
+    // .data/ (the default MIRAGE_DB_PATH) before this ran. `:memory:` and
+    // an empty string (better-sqlite3's own "anonymous temp db" specials)
+    // have no filesystem directory to create.
+    if (path !== ":memory:" && path !== "" && !existsSync(dirname(path))) {
+      mkdirSync(dirname(path), { recursive: true });
+    }
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
