@@ -93,6 +93,10 @@ export function EndpointWorkspace({ project }: { project: ProjectVM }) {
         <CaseList
           cases={selectedEndpoint.cases}
           selectedId={selectedCase?.id ?? null}
+          slug={project.slug}
+          method={selectedEndpoint.method}
+          path={selectedEndpoint.path}
+          onChanged={() => router.refresh()}
           onSelect={(id) => {
             setParams({ e: selectedEndpoint.key, c: id });
             setMobileTab("request");

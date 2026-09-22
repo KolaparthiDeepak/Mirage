@@ -8,10 +8,19 @@ export function CaseList({
   cases,
   selectedId,
   onSelect,
+  slug,
+  method,
+  path,
+  onChanged,
 }: {
   cases: CaseVM[];
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  /** Needed for the row actions (duplicate/delete) — omit to render read-only. */
+  slug?: string;
+  method?: string;
+  path?: string;
+  onChanged?: () => void;
 }) {
   // Salvaged from _explorer/CaseList.tsx: ArrowUp/Down select the sibling row and focus it.
   function onKeyDown(ev: KeyboardEvent<HTMLDivElement>) {
@@ -37,6 +46,10 @@ export function CaseList({
           selected={c.id === selectedId}
           tabbable={c.id === selectedId || (selectedId == null && i === 0)}
           onSelect={() => onSelect?.(c.id)}
+          slug={slug}
+          method={method}
+          path={path}
+          onChanged={onChanged}
         />
       ))}
     </div>

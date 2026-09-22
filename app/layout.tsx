@@ -21,8 +21,10 @@ export const metadata = {
   description: "Hosted, file-defined mock API server",
 };
 
-// Applied before first paint so there's no flash of the wrong theme.
-const themeScript = `try{var t=localStorage.getItem('mockservers-theme');if(t==='paper'){document.documentElement.dataset.theme='paper'}}catch(e){}`;
+// Applied before first paint so there's no flash of the wrong theme. Checks the
+// legacy key too, so a theme choice made before the mockservers -> Mirage rename
+// (plan 25) survives past the first load.
+const themeScript = `try{var t=localStorage.getItem('mirage-theme')||localStorage.getItem('mockservers-theme');if(t==='paper'){document.documentElement.dataset.theme='paper'}}catch(e){}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

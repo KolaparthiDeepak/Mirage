@@ -20,6 +20,23 @@ describe("expandOpenApi", () => {
     expect(r.routes[0]!.response).toEqual({ status: 200, body: null });
     expect(r.warnings.join("\n")).toMatch(/no example/i);
   });
+
+  it("fills a schema-only response from the schema when fakeFromSchema is on (plan 09)", async () => {
+    const r = await expandOpenApi(fx("schema-only.yaml"), { fakeFromSchema: true });
+    expect(r.routes[0]!.response).toEqual({
+      status: 200,
+      body: { id: "00000000-0000-4000-8000-000000000000", kind: "alpha", count: 1 },
+    });
+    expect(r.warnings.join("\n")).toMatch(/generated from schema/);
+    // determinism across a second parse
+    const r2 = await expandOpenApi(fx("schema-only.yaml"), { fakeFromSchema: true });
+    expect(JSON.stringify(r2.routes[0]!.response)).toBe(JSON.stringify(r.routes[0]!.response));
+  });
+
+  it("leaves the body empty when fakeFromSchema is off", async () => {
+    const r = await expandOpenApi(fx("schema-only.yaml"));
+    expect(r.routes[0]!.response.body).toBeNull();
+  });
   it("treats an explicit `example: null` as no example", async () => {
     const r = await expandOpenApi(fx("null-example.yaml"));
     expect(r.routes[0]!.response).toEqual({ status: 200, body: null });

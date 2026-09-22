@@ -87,13 +87,36 @@ describe("Project Overview page", () => {
     expect(screen.getByText("3")).toBeDefined();
   });
 
-  it("marks unbacked sections with a Preview badge", () => {
+  it("carries no Preview badge — traffic and stats are real as of plan 05", () => {
     renderPage();
-    expect(screen.getAllByText("Preview").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Preview")).toBeNull();
   });
 
-  it("shows a recent-traffic row for a real endpoint path", () => {
+  it("shows a copy-ready curl in the traffic empty state (plan 23)", () => {
     renderPage();
-    expect(screen.getByText("/demo/GET_CARD/v1")).toBeDefined();
+    expect(screen.getByText("No requests yet")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Copy curl" })).toBeDefined();
+  });
+});
+
+const emptyModel = {
+  build: { commit: "x", builtAt: "", warnings: [] },
+  projects: [{ slug: "demo", name: "Demo API", caseCount: 0, endpoints: [] }],
+} as never;
+
+describe("Project Overview page — no endpoints yet (plan 23)", () => {
+  afterEach(() => cleanup());
+
+  it("shows the inline first-mock form instead of stats/traffic", () => {
+    render(
+      <ViewModelProvider model={emptyModel}>
+        <ToastProvider>
+          <ProjectOverview params={resolvedParams("demo")} />
+        </ToastProvider>
+      </ViewModelProvider>,
+    );
+    expect(screen.getByText("Your first mock")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Create mock" })).toBeDefined();
+    expect(screen.queryByText("No requests yet")).toBeNull();
   });
 });

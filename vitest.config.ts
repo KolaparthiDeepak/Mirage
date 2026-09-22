@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     environmentMatchGlobs: [["app/**/*.test.tsx", "jsdom"]],
-    include: ["src/**/*.test.{ts,tsx}", "app/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "app/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"],
     exclude: [...configDefaults.exclude, "out/**", ".vercel/**"],
     passWithNoTests: true,
   },

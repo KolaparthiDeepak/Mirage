@@ -1,74 +1,60 @@
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { afterEach, describe, it, expect, vi } from "vitest";
-import type { ProjectVM } from "@/src/viewer/model";
-import { ViewModelProvider } from "@/app/_lib/view-model-context";
-import { caseHref } from "@/app/_lib/nav";
+import type { ReactNode } from "react";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import type { TrafficEntry } from "@/src/store/types";
+import { ToastProvider } from "@/app/_ui";
 import { TrafficTable } from "./TrafficTable";
 import { TrafficDrawer } from "./TrafficDrawer";
 import { TrafficView } from "./TrafficView";
-import type { TrafficEntry } from "./sample-traffic";
 import TrafficPage from "@/app/(app)/p/[slug]/traffic/page";
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+// TrafficDrawer's cURL button (CopyButton) needs a ToastProvider ancestor.
+function withToast(node: ReactNode) {
+  return <ToastProvider>{node}</ToastProvider>;
+}
+
+const { push, replace } = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+let searchParamsString = "";
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
   usePathname: () => "/p/demo/traffic",
+  useSearchParams: () => new URLSearchParams(searchParamsString),
 }));
 
-const draft = { method: "GET", url: "", headers: {}, curl: "", notes: [] };
-
-const project = {
-  slug: "demo",
-  name: "Demo",
-  caseCount: 1,
-  endpoints: [
-    {
-      key: "GET_CARD",
-      method: "GET",
-      path: "/x/GET_CARD/v1",
-      runUrl: "",
-      cases: [
-        {
-          id: "c1",
-          label: "happy",
-          isOpenApiGenerated: false,
-          match: [],
-          expected: { status: 200, body: { ok: true } },
-          request: { ...draft, body: '{"a":1}' },
-        },
-      ],
-    },
-  ],
-} as unknown as ProjectVM;
-
-const entries: TrafficEntry[] = [
-  {
+function entry(over: Partial<TrafficEntry> = {}): TrafficEntry {
+  return {
     id: "e1",
+    slug: "demo",
+    at: "2026-01-01T10:42:31.000Z",
     method: "GET",
-    endpointKey: "GET_CARD",
     path: "/x/GET_CARD/v1",
-    status: 200,
-    at: "10:42:31",
-    ms: 8,
+    query: {},
     reqHeaders: { "content-type": "application/json" },
     reqBody: '{"a":1}',
+    status: 200,
+    resHeaders: { "content-type": "application/json" },
     resBody: '{"ok":true}',
-  },
-  {
-    id: "e2",
-    method: "POST",
-    endpointKey: "GET_CARD",
-    path: "/x/GET_CARD/v1",
-    status: 404,
-    at: "10:41:58",
-    ms: 12,
-    reqHeaders: { "content-type": "application/json" },
-    reqBody: "{}",
-    resBody: "{}",
-  },
+    matchedRuleId: "get-card",
+    durationMs: 8,
+    warnings: [],
+    clientHash: null,
+    configVersion: 1,
+    truncated: false,
+    viaUpstream: false,
+    direction: "inbound",
+    ...over,
+  };
+}
+
+const entries: TrafficEntry[] = [
+  entry(),
+  entry({ id: "e2", method: "POST", status: 404, matchedRuleId: null, durationMs: 12, at: "2026-01-01T10:41:58.000Z" }),
 ];
 
 function resolvedParams(slug: string) {
+  // React's use() only unwraps a promise synchronously (no Suspense) when the
+  // thenable already carries this fulfilled-cache shape — a plain
+  // Promise.resolve() still suspends on first render.
   const p = Promise.resolve({ slug }) as Promise<{ slug: string }> & {
     status: string;
     value: { slug: string };
@@ -78,8 +64,24 @@ function resolvedParams(slug: string) {
   return p;
 }
 
+function mockFetchJson(handler: (url: string) => unknown) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      return { ok: true, json: async () => handler(url) } as Response;
+    }),
+  );
+}
+
+beforeEach(() => {
+  searchParamsString = "";
+});
+
 afterEach(() => {
   push.mockClear();
+  replace.mockClear();
+  vi.unstubAllGlobals();
   cleanup();
 });
 
@@ -88,15 +90,13 @@ describe("TrafficTable", () => {
     const onSelect = vi.fn();
     render(<TrafficTable entries={entries} onSelect={onSelect} />);
     expect(screen.getAllByRole("row")).toHaveLength(entries.length + 1); // + header row
-    fireEvent.click(screen.getByText("10:42:31").closest("tr")!);
+    fireEvent.click(screen.getByText("get-card").closest("tr")!);
     expect(onSelect).toHaveBeenCalledWith("e1");
   });
 
-  it("makes the first body row tabbable when nothing is selected (roving fallback)", () => {
+  it("shows an unmatched row's rule cell as 'unmatched'", () => {
     render(<TrafficTable entries={entries} />);
-    const rows = screen.getAllByRole("row").slice(1); // drop the header row
-    expect(rows[0]!.getAttribute("tabindex")).toBe("0");
-    expect(rows[1]!.getAttribute("tabindex")).toBe("-1");
+    expect(screen.getByText("unmatched")).toBeDefined();
   });
 
   it("shows an empty state with no entries", () => {
@@ -107,55 +107,70 @@ describe("TrafficTable", () => {
   it("labels every body cell with data-label for the stacked mobile layout", () => {
     render(<TrafficTable entries={entries} />);
     const cells = document.querySelectorAll("tbody td");
-    expect(cells.length).toBe(entries.length * 5);
+    expect(cells.length).toBe(entries.length * 6);
     cells.forEach((td) => expect(td.getAttribute("data-label")).toBeTruthy());
   });
 });
 
 describe("TrafficDrawer", () => {
-  it("shows the response JSON and replays via caseHref", () => {
+  it("shows the response body and redacts a masked field with a visible label", async () => {
+    mockFetchJson(() => ({
+      outsideBasePath: false,
+      traces: [{ ruleId: "get-card", method: "pass", path: "pass", match: "skip" }],
+      winnerRuleId: "get-card",
+      requestHints: [],
+    }));
     render(
-      <TrafficDrawer entry={entries[0]!} project={project} open onClose={vi.fn()} />,
+      withToast(<TrafficDrawer entry={entry({ resBody: "***", reqBody: '{"ok":1}' })} open onClose={vi.fn()} />),
     );
-    expect(screen.getByText(/"ok"/)).toBeDefined();
-    fireEvent.click(screen.getByText("Replay request"));
-    expect(push).toHaveBeenCalledWith(caseHref("demo", "GET_CARD", "c1"));
+    expect(screen.getByText("***")).toBeDefined();
+    expect(screen.getByText("(redacted)")).toBeDefined();
+    await waitFor(() => expect(screen.getByText(/get-card/)).toBeDefined());
+  });
+
+  it("replay issues a raw fetch against the mock URL", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        calls.push(String(input));
+        return { ok: true, status: 200, text: async () => "ok", json: async () => ({ traces: [], requestHints: [], winnerRuleId: null, outsideBasePath: false }) } as Response;
+      }),
+    );
+    render(withToast(<TrafficDrawer entry={entry()} open onClose={vi.fn()} />));
+    fireEvent.click(screen.getByText("Replay"));
+    await waitFor(() => expect(calls.some((u) => u.includes("/m/demo/x/GET_CARD/v1"))).toBe(true));
   });
 });
 
 describe("TrafficView", () => {
-  const rows = entries.map((entry) => ({ entry, project }));
-
-  it("renders the toolbar, an Export button and a row per entry", () => {
-    render(<TrafficView rows={rows} exportName="x.json" />);
-    expect(screen.getByRole("button", { name: "Export" })).toBeDefined();
-    expect(screen.getAllByRole("row")).toHaveLength(entries.length + 1);
+  it("fetches on mount and renders a row per returned entry, with export buttons", async () => {
+    mockFetchJson(() => ({ rows: entries, nextCursor: null }));
+    render(withToast(<TrafficView slugs={["demo"]} exportName="x.json" />));
+    await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(entries.length + 1));
+    expect(screen.getByRole("button", { name: "Export JSON" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Export HAR" })).toBeDefined();
   });
 
-  it("opens the drawer with the selected row's own project on click", () => {
-    render(<TrafficView rows={rows} exportName="x.json" />);
-    fireEvent.click(screen.getByText("10:42:31").closest("tr")!);
-    fireEvent.click(screen.getByText("Replay request"));
-    expect(push).toHaveBeenCalledWith(caseHref("demo", "GET_CARD", "c1"));
-  });
-
-  it("filters rows by the method select", () => {
-    render(<TrafficView rows={rows} exportName="x.json" />);
-    fireEvent.change(screen.getByLabelText("Filter by method"), {
-      target: { value: "POST" },
-    });
-    expect(screen.getAllByRole("row")).toHaveLength(2); // header + the one POST row
+  it("changing the method filter updates the URL", async () => {
+    mockFetchJson(() => ({ rows: [], nextCursor: null }));
+    render(withToast(<TrafficView slugs={["demo"]} exportName="x.json" />));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Filter by method" })).toBeDefined());
+    fireEvent.change(screen.getByLabelText("Filter by method"), { target: { value: "POST" } });
+    expect(replace).toHaveBeenCalledWith(expect.stringContaining("method=POST"), expect.anything());
   });
 });
 
 describe("Traffic page", () => {
-  it("renders a Preview badge and the traffic table", () => {
-    render(
-      <ViewModelProvider model={{ build: { commit: "x", builtAt: "", warnings: [] }, projects: [project] } as never}>
-        <TrafficPage params={resolvedParams("demo")} />
-      </ViewModelProvider>,
-    );
-    expect(screen.getByText("Preview")).toBeDefined();
-    expect(screen.getByRole("table")).toBeDefined();
+  it("renders real rows once the fetch resolves", async () => {
+    mockFetchJson(() => ({ rows: entries, nextCursor: null }));
+    render(withToast(<TrafficPage params={resolvedParams("demo")} />));
+    await waitFor(() => expect(screen.getAllByRole("row").length).toBeGreaterThan(1));
+  });
+
+  it("shows the empty state when there is no traffic yet", async () => {
+    mockFetchJson(() => ({ rows: [], nextCursor: null }));
+    render(withToast(<TrafficPage params={resolvedParams("demo")} />));
+    await waitFor(() => expect(screen.getByText("No traffic")).toBeDefined());
   });
 });

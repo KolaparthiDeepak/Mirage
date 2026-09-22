@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
+// after() requires Next's real request-scope (AsyncLocalStorage) context,
+// which calling the handler directly in a test never has. The traffic write
+// it schedules is exercised separately in route.store-source.test.ts; here it
+// only needs to not crash the route.
+vi.mock("next/server", () => ({ after: (cb: () => unknown) => void cb() }));
+
 vi.mock("@/mocks.generated.json", () => ({
   default: {
     builtAt: "t", commit: "c", warnings: [],
@@ -75,5 +81,14 @@ describe("mock route", () => {
     const res = await call(POST, "https://x/m/demo/commands/nope", { method: "POST", body: "{}" });
     expect(res.headers.get("x-mock-matched")).toBe("false");
     expect(res.headers.get("x-mock-rule-id")).toBe("");
+  });
+  it("stamps every response with a unique x-mirage-request-id (plan 24)", async () => {
+    const a = await call(POST, "https://x/m/demo/commands/verify", { method: "POST", body: "{}" });
+    const b = await call(POST, "https://x/m/demo/commands/verify", { method: "POST", body: "{}" });
+    const idA = a.headers.get("x-mirage-request-id");
+    const idB = b.headers.get("x-mirage-request-id");
+    expect(idA).toBeTruthy();
+    expect(idB).toBeTruthy();
+    expect(idA).not.toBe(idB);
   });
 });

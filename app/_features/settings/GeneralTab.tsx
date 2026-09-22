@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
-import { Button, Input, CopyButton } from "@/app/_ui";
-import { PreviewBadge } from "@/app/_shell/PreviewBadge";
+import { Button, Input } from "@/app/_ui";
+import { adminFetch, AdminAuthError } from "@/app/_lib/admin-token";
 import type { ProjectVM } from "@/src/viewer/model";
 import type { ProjectConfigLite } from "@/app/_lib/project-config-context";
-import { projectYaml } from "@/app/_lib/project-yaml";
 import styles from "./settings.module.css";
 
 export function GeneralTab({
@@ -19,7 +18,30 @@ export function GeneralTab({
   const [name, setName] = useState(config.name);
   const [basePath, setBasePath] = useState(config.basePath ?? "");
   const [description, setDescription] = useState("");
-  const [yaml, setYaml] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await adminFetch(`/api/projects/${slug}`, {
+        method: "PATCH",
+        json: { name, basePath: basePath || undefined },
+      });
+      if (!res.ok) {
+        setError((await res.json()).error ?? `save failed (${res.status})`);
+        return;
+      }
+      setSaved(true);
+    } catch (e) {
+      setError(e instanceof AdminAuthError ? e.message : e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className={styles.tabPanel}>
@@ -29,7 +51,7 @@ export function GeneralTab({
           value={name}
           onChange={(e) => {
             setName(e.target.value);
-            setYaml(null);
+            setSaved(false);
           }}
         />
       </label>
@@ -49,7 +71,7 @@ export function GeneralTab({
           value={basePath}
           onChange={(e) => {
             setBasePath(e.target.value);
-            setYaml(null);
+            setSaved(false);
           }}
         />
       </label>
@@ -59,31 +81,14 @@ export function GeneralTab({
         <Input value={project.slug} disabled />
       </label>
 
-      <Button
-        variant="secondary"
-        onClick={() =>
-          setYaml(
-            yaml
-              ? null
-              : projectYaml({ name, slug: project.slug, basePath }),
-          )
-        }
-      >
-        Generate project.yaml
+      <Button variant="primary" onClick={save} disabled={busy}>
+        {busy ? "Saving…" : "Save"}
       </Button>
-
-      {yaml ? (
-        <div className={styles.yamlBlock}>
-          <pre className={styles.pre}>{yaml}</pre>
-          <CopyButton text={() => yaml} label="Copy YAML" />
-          <PreviewBadge />
-          <p className={styles.note}>
-            These are the fields you edited. Merge them into{" "}
-            <code>mocks/{slug}/project.yaml</code> (keep your existing{" "}
-            <code>defaults:</code> block) and redeploy — the browser can&apos;t
-            write the repo.
-          </p>
-        </div>
+      {saved ? <p className={styles.note}>Saved — live immediately.</p> : null}
+      {error ? (
+        <p role="alert" className={styles.note}>
+          {error}
+        </p>
       ) : null}
     </div>
   );

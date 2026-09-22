@@ -2,9 +2,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import styles from "./intro-splash.module.css";
 
-// Timeline (ms): 0-500 fade-in + drift, 500-2200 ease to target,
-// 2200-2800 settle + glow pulse, 2800-3200 hold, then 400ms overlay fade.
-const TOTAL_MS = 3200;
+// Plan 23: 3.65s of unskippable canvas work on every load was the wrong
+// place for it. Same choreography, scaled 4x smaller (SCALE below), shown
+// once per browser (localStorage), and cut short instantly on any input.
+const SEEN_KEY = "mirage-intro-seen";
+/** Dispatch this to show the intro again regardless of SEEN_KEY (see the
+ *  command palette's "Replay intro animation"). */
+export const REPLAY_INTRO_EVENT = "mirage:replay-intro";
+
+const SCALE = 0.25;
+// Timeline (ms): 0-125 fade-in + drift, 125-550 ease to target,
+// 550-700 settle + glow pulse, 700-800 hold, then a quick overlay fade.
+const TOTAL_MS = 3200 * SCALE;
 
 // Fallbacks are the Obsidian token values (app/tokens.css); the real theme
 // colour is read from the CSS custom property at runtime.
@@ -23,17 +32,76 @@ export function IntroSplash() {
   const [show, setShow] = useState(false);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const reducedRef = useRef(false);
 
   useLayoutEffect(() => {
-    let reduced = false;
     try {
-      reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      reducedRef.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     } catch {
       /* no matchMedia — assume motion is fine */
     }
-    if (reduced) return;
-    setShow(true);
+    if (reducedRef.current) return;
+    let seen = false;
+    try {
+      seen = localStorage.getItem(SEEN_KEY) === "1";
+    } catch {
+      /* no localStorage — treat every visit as first */
+    }
+    if (!seen) setShow(true);
   }, []);
+
+  // Replayable on demand (command palette) regardless of SEEN_KEY/reduced
+  // motion — someone asking to see it again is not the "unwanted delay"
+  // this plan is fixing.
+  useEffect(() => {
+    const onReplay = () => setShow(true);
+    window.addEventListener(REPLAY_INTRO_EVENT, onReplay);
+    return () => window.removeEventListener(REPLAY_INTRO_EVENT, onReplay);
+  }, []);
+
+  // Lifecycle (timers + skip-on-input) is independent of whether the canvas
+  // 2d context is actually available, so "click to skip" still works even
+  // where drawing can't happen (a stub `getContext` in tests, an exotic
+  // browser) — the escape hatch must never depend on the thing it escapes.
+  useEffect(() => {
+    if (!show) return;
+
+    function markSeen() {
+      try {
+        localStorage.setItem(SEEN_KEY, "1");
+      } catch {
+        /* no localStorage — will just show again next visit */
+      }
+    }
+
+    const fadeTimer = setTimeout(() => {
+      overlayRef.current?.setAttribute("data-fadeout", "");
+    }, TOTAL_MS);
+    const doneTimer = setTimeout(() => {
+      markSeen();
+      setShow(false);
+    }, TOTAL_MS + 150);
+
+    // "an immediate exit on any click, key or scroll" — no fade, just gone.
+    function skip() {
+      clearTimeout(fadeTimer);
+      clearTimeout(doneTimer);
+      markSeen();
+      setShow(false);
+    }
+    const opts = { capture: true };
+    window.addEventListener("pointerdown", skip, opts);
+    window.addEventListener("keydown", skip, opts);
+    window.addEventListener("wheel", skip, opts);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(doneTimer);
+      window.removeEventListener("pointerdown", skip, opts);
+      window.removeEventListener("keydown", skip, opts);
+      window.removeEventListener("wheel", skip, opts);
+    };
+  }, [show]);
 
   useEffect(() => {
     if (!show) return;
@@ -124,16 +192,16 @@ export function IntroSplash() {
       ctx.globalAlpha = 1;
 
       const glow =
-        t >= 2200 ? 0.5 + 0.5 * Math.sin((t - 2200) / 180) : 0;
+        t >= 2200 * SCALE ? 0.5 + 0.5 * Math.sin((t - 2200 * SCALE) / (180 * SCALE)) : 0;
 
       for (const p of parts) {
         let alpha: number;
-        if (t < 500) {
+        if (t < 500 * SCALE) {
           p.x = p.sx + p.vx * t + Math.sin(t * 0.002 + p.seed) * 14 * dpr;
           p.y = p.sy + p.vy * t + Math.cos(t * 0.002 + p.seed) * 14 * dpr;
-          alpha = 0.5 * (t / 500);
-        } else if (t < 2200) {
-          const e = easeOutCubic(clamp01((t - 500) / 1700));
+          alpha = 0.5 * (t / (500 * SCALE));
+        } else if (t < 2200 * SCALE) {
+          const e = easeOutCubic(clamp01((t - 500 * SCALE) / (1700 * SCALE)));
           const turb = (1 - e) * Math.sin(t * 0.03 + p.seed) * 10 * dpr;
           p.x = p.sx + (p.tx - p.sx) * e + turb;
           p.y = p.sy + (p.ty - p.sy) * e + turb;
@@ -162,16 +230,7 @@ export function IntroSplash() {
     };
     raf = requestAnimationFrame(tick);
 
-    const fadeTimer = setTimeout(() => {
-      overlayRef.current?.setAttribute("data-fadeout", "");
-    }, TOTAL_MS);
-    const doneTimer = setTimeout(() => setShow(false), TOTAL_MS + 450);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(fadeTimer);
-      clearTimeout(doneTimer);
-    };
+    return () => cancelAnimationFrame(raf);
   }, [show]);
 
   if (!show) return null;

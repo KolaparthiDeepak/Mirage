@@ -18,7 +18,7 @@ function projectItems(slug: string): NavItem[] {
     { label: "Endpoints", href: `/p/${slug}/endpoints` },
     { label: "Cases", href: `/p/${slug}/cases` },
     { label: "Rules", href: `/p/${slug}/rules` },
-    { label: "Scenarios", href: `/p/${slug}/scenarios` },
+    { label: "Flows", href: `/p/${slug}/flows` },
     { label: "Environments", href: `/p/${slug}/environments` },
     { label: "Variables", href: `/p/${slug}/variables` },
   ];

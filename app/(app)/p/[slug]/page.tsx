@@ -2,12 +2,12 @@
 import { use } from "react";
 import Link from "next/link";
 import { useProject } from "@/app/_lib/view-model-context";
+import { useTraffic } from "@/app/_lib/use-traffic";
 import { Badge, CopyButton, MethodPill, StatusCode, EmptyState } from "@/app/_ui";
 import { PageHeader } from "@/app/_shell/PageHeader";
-import { PreviewBadge } from "@/app/_shell/PreviewBadge";
 import { mockPath, mockBaseUrl } from "@/app/_lib/mock-url";
 import { ProjectStats } from "@/app/_features/overview/ProjectStats";
-import { sampleTraffic } from "@/app/_features/traffic/sample-traffic";
+import { FirstMockOnboarding } from "@/app/_features/overview/FirstMockOnboarding";
 import styles from "@/app/_features/overview/overview.module.css";
 
 const DESCRIPTION = "Mock API — response selection driven by the request.";
@@ -15,7 +15,8 @@ const DESCRIPTION = "Mock API — response selection driven by the request.";
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const project = useProject(slug)!;
-  const traffic = sampleTraffic(project).slice(0, 5);
+  const { rows: traffic } = useTraffic([slug], {}, false);
+  const recent = traffic.slice(0, 5);
 
   return (
     <>
@@ -38,45 +39,56 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         </Link>
       </div>
 
-      <ProjectStats project={project} />
+      {project.endpoints.length === 0 ? (
+        <FirstMockOnboarding slug={project.slug} basePath={project.basePath} />
+      ) : (
+        <>
+          <ProjectStats project={project} />
 
-      <section className={styles.traffic}>
-        <div className={styles.trafficHead}>
-          <h2 className={styles.h2}>Recent traffic</h2>
-          <PreviewBadge />
-        </div>
-        {traffic.length === 0 ? (
-          <EmptyState
-            title="No traffic yet"
-            body="Requests to this mock API will appear here."
-          />
-        ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th scope="col">Method</th>
-                <th scope="col">Path</th>
-                <th scope="col">Status</th>
-                <th scope="col">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {traffic.map((e) => (
-                <tr key={e.id}>
-                  <td>
-                    <MethodPill method={e.method} />
-                  </td>
-                  <td className={styles.mono}>{e.path}</td>
-                  <td>
-                    <StatusCode code={e.status} />
-                  </td>
-                  <td>{e.ms} ms</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+          <section className={styles.traffic}>
+            <div className={styles.trafficHead}>
+              <h2 className={styles.h2}>Recent traffic</h2>
+            </div>
+            {recent.length === 0 ? (
+              <EmptyState
+                title="No requests yet"
+                body="Requests to this mock API will appear here."
+                action={
+                  <CopyButton
+                    text={() => `curl -sS ${mockBaseUrl(project.slug, project.basePath)}`}
+                    label="Copy curl"
+                  />
+                }
+              />
+            ) : (
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th scope="col">Method</th>
+                    <th scope="col">Path</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((e) => (
+                    <tr key={e.id}>
+                      <td>
+                        <MethodPill method={e.method} />
+                      </td>
+                      <td className={styles.mono}>{e.path}</td>
+                      <td>
+                        <StatusCode code={e.status} />
+                      </td>
+                      <td>{e.durationMs} ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </>
+      )}
     </>
   );
 }

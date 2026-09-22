@@ -86,6 +86,15 @@ describe("CommandPalette", () => {
     expect(push).toHaveBeenCalledWith("/traffic");
   });
 
+  it("'Replay intro animation' dispatches the replay event (plan 23)", () => {
+    setup();
+    const onReplay = vi.fn();
+    window.addEventListener("mirage:replay-intro", onReplay);
+    fireEvent.click(screen.getByText("Replay intro animation"));
+    expect(onReplay).toHaveBeenCalledTimes(1);
+    window.removeEventListener("mirage:replay-intro", onReplay);
+  });
+
   it("runs the highlighted command on ArrowDown + Enter", () => {
     setup();
     const input = screen.getByLabelText("Command or search");

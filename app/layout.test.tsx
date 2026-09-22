@@ -16,7 +16,8 @@ describe("root layout", () => {
     expect(src).toMatch(/--font-inter/);
     expect(src).toMatch(/--font-jetbrains/);
   });
-  it("keeps the pre-paint theme script", () => {
+  it("keeps the pre-paint theme script, and checks the pre-rename key too (plan 25)", () => {
+    expect(src).toMatch(/localStorage\.getItem\('mirage-theme'\)/);
     expect(src).toMatch(/localStorage\.getItem\('mockservers-theme'\)/);
   });
 });

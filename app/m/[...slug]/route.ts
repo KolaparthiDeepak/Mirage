@@ -1,10 +1,29 @@
-import bundleJson from "@/mocks.generated.json";
-import type { CompiledBundle } from "@/src/compile/compile";
+import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { parseRequest } from "@/src/engine/request";
 import { resolve } from "@/src/engine/resolve";
-import type { ProjectConfig } from "@/src/engine/types";
+import type { UpstreamConfig } from "@/src/engine/types";
+import { proxyUnmatchedRequest } from "@/src/proxy";
+import { applyState } from "@/src/state/apply";
+import { computeFaults, faultRng, mangleBody, type FaultOutcome } from "@/src/faults/apply";
+import { deliverCallback, type CallbackContext } from "@/src/callbacks/deliver";
+import { checkRequestAgainstSpec } from "@/src/contract/request-check";
+import { clientHash, clientIp } from "@/src/store/client-hash";
+import { allowMockRequest } from "@/src/observability/abuse-guard";
+import { logMockEvent } from "@/src/observability/log";
+import { redactBody, redactHeaders } from "@/src/store/redact";
+import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
+import { shouldRecord, truncateBody } from "@/src/store/traffic-limits";
+import type { TrafficEntry } from "@/src/store/types";
 
-const bundle = bundleJson as unknown as CompiledBundle;
+// Plan 07: absent, "off", or the global kill switch → today's behaviour exactly.
+function upstreamActive(upstream: UpstreamConfig | undefined): upstream is UpstreamConfig {
+  return (
+    process.env.MIRAGE_UPSTREAM !== "off" &&
+    upstream != null &&
+    (upstream.mode === "record" || upstream.mode === "passthrough")
+  );
+}
 
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -16,13 +35,47 @@ function json(status: number, body: unknown, extra: Record<string, string> = {})
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...extra } });
 }
 
+// Plan 04: recording is independent of where *config* came from — a
+// bundle-sourced project still gets its traffic recorded to the store. The
+// driver is reached only through the lazy singleton in runtime-source.ts
+// (dynamic import — see that file for why), and every failure here is caught
+// and logged, never allowed to affect a response that has already been sent.
+async function recordTrafficEntry(entry: TrafficEntry): Promise<void> {
+  if (process.env.MIRAGE_RECORD_TRAFFIC === "off") return;
+  try {
+    const store = await getRuntimeStore();
+    await store.recordTraffic(entry);
+  } catch (e) {
+    console.error(`[traffic] failed to record request for "${entry.slug}": ${(e as Error).message}`);
+  }
+}
+
 async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }): Promise<Response> {
+  const startedAt = Date.now();
+  // Plan 24: one id per inbound request, reused as this request's traffic
+  // row id and returned as x-mirage-request-id — the thing that makes "a
+  // user's report traceable to its traffic row and its logs" true. A
+  // callback's own outbound attempts (below) get their own ids: those are
+  // separate events, not this request.
+  const requestId = randomUUID();
+
+  // Plan 24: the one fully public, unauthenticated endpoint in this
+  // product gets a per-IP abuse guard, before any real work (including the
+  // store round-trip getCurrentConfig can make) — a rate-limited request
+  // should cost as little as possible to reject.
+  const ip = clientIp(req.headers);
+  const clientKey = ip && clientHash(ip);
+  if (clientKey && !allowMockRequest(clientKey)) {
+    return json(429, { error: "rate limit exceeded" }, { "access-control-allow-origin": "*" });
+  }
+
   const { slug: parts } = await ctx.params;
   const slug = parts[0]!;
   const subPath = "/" + parts.slice(1).join("/");
-  const project: ProjectConfig | undefined = bundle.projects[slug];
+  const found = await getCurrentConfig(slug);
 
-  if (!project) return json(404, { error: "unknown project", slug });
+  if (!found) return json(404, { error: "unknown project", slug });
+  const { config: project, configVersion } = found;
 
   // Introspection: /m/<slug>/__spec — served here because Next.js excludes the
   // underscore-prefixed `__spec` folder from routing, so a dedicated route file
@@ -31,6 +84,19 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     return project.openApiDoc != null
       ? Response.json(project.openApiDoc)
       : json(404, { error: "no openapi spec", slug });
+  }
+
+  // Plan 10: POST /m/<slug>/__reset[?session=] — zero the stateful counters so
+  // a CI job can reset between runs without a token or the UI.
+  if (parts.length === 2 && parts[1] === "__reset" && req.method === "POST" && process.env.MIRAGE_STATEFUL !== "off") {
+    const session = new URL(req.url).searchParams.get("session") ?? undefined;
+    try {
+      const store = await getRuntimeStore();
+      const removed = await store.resetCounters(slug, undefined, session);
+      return json(200, { reset: removed, slug, session: session ?? "all" });
+    } catch (e) {
+      return json(200, { reset: 0, slug, error: (e as Error).message });
+    }
   }
 
   const cors = project.defaults.cors ? CORS_HEADERS : {};
@@ -42,31 +108,295 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
   const parsed = await parseRequest(req, subPath);
   const result = resolve(parsed, project);
 
-  if (result.delayMs > 0) {
-    await new Promise((r) => setTimeout(r, Math.min(result.delayMs, 9000)));
+  // Plan 10: a matched rule with response variants — pick one per
+  // (slug, ruleId, session) and bump the counter. resolve() already built
+  // variant[0]; applyState overrides it, or returns null (not stateful, or
+  // the counter store was unavailable) and variant[0] stands.
+  let stateHeaders: Record<string, string> = {};
+  if (
+    result.matchedRuleId !== null &&
+    result.matchedRoute?.responses &&
+    process.env.MIRAGE_STATEFUL !== "off"
+  ) {
+    try {
+      const store = await getRuntimeStore();
+      const state = await applyState(store, slug, result);
+      if (state) {
+        result.status = state.status;
+        result.body = state.body;
+        result.headers = { ...state.headers };
+        result.warnings.push(...state.warnings);
+        stateHeaders = {
+          "x-mirage-variant": String(state.variantIndex),
+          "x-mirage-session": state.session,
+        };
+      }
+    } catch (e) {
+      console.error(`[state] apply failed for "${slug}": ${(e as Error).message}`);
+    }
   }
 
-  console.log(JSON.stringify({
-    t: new Date().toISOString(),
-    proj: slug,
-    m: req.method,
+  // Plan 13.2: validate the request against the spec. Never changes the
+  // response; violations are annotated onto the traffic row. With
+  // contract.rejectInvalid the request gets a 400 instead.
+  if (project.contract?.validate && process.env.MIRAGE_CONTRACT !== "off") {
+    try {
+      const violations = await checkRequestAgainstSpec(
+        project.openApiDoc,
+        req.method,
+        result.matchedRoute?.path ?? subPath,
+        result.status,
+        parsed.body,
+        parsed.query,
+      );
+      if (violations.length > 0) {
+        result.warnings.push(...violations.map((v) => `contract: ${v.path}: ${v.message}`));
+        if (project.contract.rejectInvalid) {
+          return json(400, { error: "request violates the OpenAPI contract", violations }, cors);
+        }
+      }
+    } catch (e) {
+      console.error(`[contract] request check failed for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  // Plan 07: the proxy is strictly a fallback for what the mock does not know.
+  // Only an *unmatched* request can reach it, so turning it on can never change
+  // a matched rule's behaviour.
+  if (result.matchedRuleId === null && upstreamActive(project.upstream)) {
+    let search = "";
+    try { search = new URL(req.url).search; } catch { /* keep "" */ }
+
+    const outcome = await proxyUnmatchedRequest({
+      slug,
+      upstream: project.upstream,
+      method: req.method,
+      subPath,
+      search,
+      reqHeaders: parsed.headers,
+      reqBody: parsed.rawBody || null,
+    });
+
+    if ("rateLimited" in outcome) {
+      return json(429, { error: "upstream rate limit exceeded for this project", slug }, cors);
+    }
+
+    const resHeaders: Record<string, string> = {
+      ...outcome.response.headers,
+      ...cors,
+      "x-mock-matched": "false",
+      "x-mirage-request-id": requestId,
+    };
+    const rec = outcome.record;
+    if (rec && shouldRecord(slug, rec.status, false)) {
+      try {
+        const reqBody = truncateBody(redactBody(parsed.rawBody || null));
+        const resBody = truncateBody(redactBody(rec.bodyText));
+        after(() =>
+          recordTrafficEntry({
+            id: requestId,
+            slug,
+            at: new Date(startedAt).toISOString(),
+            method: req.method,
+            path: subPath,
+            query: parsed.query,
+            reqHeaders: redactHeaders(parsed.headers),
+            reqBody: reqBody.body,
+            status: rec.status,
+            resHeaders: redactHeaders(resHeaders),
+            resBody: resBody.body,
+            matchedRuleId: null,
+            durationMs: Date.now() - startedAt,
+            warnings: rec.error ? [`upstream ${rec.error}`] : [],
+            clientHash: clientHash(clientIp(req.headers)),
+            configVersion,
+            truncated: reqBody.truncated || resBody.truncated || rec.truncated,
+            viaUpstream: true,
+            direction: "inbound",
+          }),
+        );
+      } catch (e) {
+        console.error(`[traffic] could not schedule upstream recording for "${slug}": ${(e as Error).message}`);
+      }
+    }
+
+    logMockEvent({
+      requestId,
+      project: slug,
+      method: req.method,
+      path: subPath,
+      rule: null,
+      status: outcome.response.status,
+      matched: false,
+      warnings: 0,
+      viaUpstream: true,
+    });
+    return new Response(outcome.response.bodyText, { status: outcome.response.status, headers: resHeaders });
+  }
+
+  // Plan 11: fault injection. Applied after resolve()/applyState, only when
+  // `faults.enabled` and MIRAGE_FAULTS !== "off". A seeded project bumps a
+  // per-rule counter (session "__faults") so the failure sequence is
+  // reproducible; an unseeded one uses Math.random.
+  let faultOutcome: FaultOutcome | null = null;
+  if (project.faults?.enabled && process.env.MIRAGE_FAULTS !== "off") {
+    const ruleKey = result.matchedRuleId ?? "__unmatched";
+    try {
+      let callCount = 0;
+      if (project.faults.seed) {
+        const store = await getRuntimeStore();
+        callCount = await store.bumpCounter(slug, ruleKey, "__faults");
+      }
+      faultOutcome = computeFaults(project.faults, faultRng(project.faults, ruleKey, callCount));
+      if (faultOutcome.override) {
+        result.status = faultOutcome.override.status;
+        result.body = faultOutcome.override.body;
+        result.headers = { "content-type": "application/json" };
+      }
+      result.warnings.push(...faultOutcome.notes.map((n) => `fault: ${n}`));
+    } catch (e) {
+      console.error(`[faults] compute failed for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  const totalDelayMs = Math.min(result.delayMs + (faultOutcome?.extraDelayMs ?? 0), 9000);
+  if (totalDelayMs > 0) {
+    await new Promise((r) => setTimeout(r, totalDelayMs));
+  }
+
+  logMockEvent({
+    requestId,
+    project: slug,
+    method: req.method,
     path: subPath,
     rule: result.matchedRuleId,
     status: result.status,
     matched: result.matchedRuleId !== null,
-    warns: result.warnings.length,
-  }));
+    warnings: result.warnings.length,
+  });
 
   const headers: Record<string, string> = {
     ...result.headers,
     ...cors,
+    ...stateHeaders,
+    ...(faultOutcome && faultOutcome.notes.length > 0 ? { "x-mirage-fault": faultOutcome.notes.join("; ") } : {}),
     "x-mock-rule-id": result.matchedRuleId ?? "",
     "x-mock-matched": String(result.matchedRuleId !== null),
+    "x-mirage-request-id": requestId,
   };
   let payload: BodyInit | null;
-  if (result.body === null || result.body === undefined) payload = null;
-  else if (typeof result.body === "string") payload = result.body;
-  else payload = JSON.stringify(result.body);
+  let resBodyText: string | null;
+  if (result.body === null || result.body === undefined) {
+    payload = null;
+    resBodyText = null;
+  } else if (typeof result.body === "string") {
+    payload = result.body;
+    resBodyText = result.body;
+  } else {
+    payload = JSON.stringify(result.body);
+    resBodyText = payload;
+  }
+
+  // Plan 11: a `malformed` fault mangles the serialized body just before it
+  // goes out — after recording captures the intended body below.
+  if (faultOutcome?.malform) {
+    payload = mangleBody(resBodyText, faultOutcome.malform, faultRng(project.faults!, result.matchedRuleId ?? "__unmatched", 0));
+    delete headers["content-length"];
+  }
+
+  // Plan 04: written after the response, in Next's after() (the App Router
+  // equivalent of Vercel's waitUntil) — never before, never awaited by the
+  // request. Sampling and redaction/truncation are applied here, on the
+  // fields already computed above, at zero extra cost to the hot path itself.
+  //
+  // Per-project redaction config and a per-project kill switch are named in
+  // plan 04 but need a project-level settings field that doesn't exist in the
+  // schema yet; only the global defaults (header denylist + heuristic) and
+  // the global MIRAGE_RECORD_TRAFFIC kill switch ship in this pass.
+  const matched = result.matchedRuleId !== null;
+  if (shouldRecord(slug, result.status, matched)) {
+    try {
+      // after() itself — not just the callback it schedules — throws
+      // synchronously if called outside Next's real request-scope context
+      // (confirmed: it is not a lint-only concern, it is an uncaught
+      // exception). That can never be allowed to affect a response that has
+      // not been returned yet, so the call itself is inside this try, not
+      // just recordTrafficEntry's internals.
+      const reqBody = truncateBody(redactBody(parsed.rawBody || null));
+      const resBody = truncateBody(redactBody(resBodyText));
+      after(() =>
+        recordTrafficEntry({
+          id: requestId,
+          slug,
+          at: new Date(startedAt).toISOString(),
+          method: req.method,
+          path: subPath,
+          query: parsed.query,
+          reqHeaders: redactHeaders(parsed.headers),
+          reqBody: reqBody.body,
+          status: result.status,
+          resHeaders: redactHeaders(headers),
+          resBody: resBody.body,
+          matchedRuleId: result.matchedRuleId,
+          durationMs: Date.now() - startedAt,
+          warnings: result.warnings,
+          clientHash: clientHash(clientIp(req.headers)),
+          configVersion,
+          truncated: reqBody.truncated || resBody.truncated,
+          viaUpstream: false,
+          direction: "inbound",
+        }),
+      );
+    } catch (e) {
+      console.error(`[traffic] could not schedule recording for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  // Plan 12: a matched rule with a callback fires it after the response, in
+  // after() (delay <= 5s — the waitUntil path). Each delivery attempt is
+  // recorded as an *outbound* traffic row so a silent failure is visible.
+  const callback = result.matchedRoute?.callback;
+  if (callback && result.matchedRuleId !== null && process.env.MIRAGE_CALLBACKS !== "off") {
+    const cbCtx: CallbackContext = {
+      request: { path: result.templateContext?.path ?? {}, query: parsed.query, body: parsed.body },
+      response: { status: result.status, body: result.body },
+    };
+    try {
+      after(async () => {
+        try {
+          if (callback.delayMs > 0) await new Promise((r) => setTimeout(r, Math.min(callback.delayMs, 5000)));
+          const cb = await deliverCallback(slug, callback, cbCtx);
+          for (const a of cb.attempts) {
+            await recordTrafficEntry({
+              id: randomUUID(),
+              slug,
+              at: new Date().toISOString(),
+              method: callback.method,
+              path: a.url,
+              query: {},
+              reqHeaders: {},
+              reqBody: null,
+              status: a.status,
+              resHeaders: {},
+              resBody: a.error ?? null,
+              matchedRuleId: result.matchedRuleId,
+              durationMs: 0,
+              warnings: [...cb.warnings, ...(a.error ? [`callback attempt ${a.attempt}: ${a.error}`] : [])],
+              clientHash: null,
+              configVersion,
+              truncated: false,
+              viaUpstream: false,
+              direction: "outbound",
+            });
+          }
+        } catch (e) {
+          console.error(`[callback] delivery failed for "${slug}": ${(e as Error).message}`);
+        }
+      });
+    } catch (e) {
+      console.error(`[callback] could not schedule for "${slug}": ${(e as Error).message}`);
+    }
+  }
 
   return new Response(payload, { status: result.status, headers });
 }

@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info: { title: SchemaOnly, version: 1.0.0 }
+paths:
+  /widget:
+    get:
+      operationId: getWidget
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, kind, count]
+                properties:
+                  id: { type: string, format: uuid }
+                  kind: { type: string, enum: [alpha, beta] }
+                  count: { type: integer, minimum: 1 }
+                  note: { type: string }

@@ -11,6 +11,7 @@ import { EndpointToolbar } from "@/app/_features/endpoints/EndpointToolbar";
 import { EndpointList } from "@/app/_features/endpoints/EndpointList";
 import { EndpointWorkspace } from "@/app/_features/endpoints/EndpointWorkspace";
 import { CreateEndpointModal } from "@/app/_features/endpoints/CreateEndpointModal";
+import { ImportRulesModal } from "@/app/_features/import/ImportRulesModal";
 import styles from "@/app/_features/endpoints/endpoints.module.css";
 
 function groupPrefix(path: string): string {
@@ -29,6 +30,7 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
   const [method, setMethod] = useState("all");
   const [view, setView] = useState<"all" | "grouped">("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const viewTabsId = useId();
   const q = useDebounced(query, 150).trim().toLowerCase();
 
@@ -70,15 +72,22 @@ export default function EndpointsPage({ params }: { params: Promise<{ slug: stri
       <PageHeader
         title="Endpoints"
         actions={
-          <Button variant="primary" onClick={() => setCreateOpen(true)}>
-            New Endpoint
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              Import
+            </Button>
+            <Button variant="primary" onClick={() => setCreateOpen(true)}>
+              New Endpoint
+            </Button>
+          </>
         }
       />
       <CreateEndpointModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        slug={slug}
       />
+      <ImportRulesModal open={importOpen} onClose={() => setImportOpen(false)} slug={slug} />
 
       {workspaceKey ? (
         <EndpointWorkspace project={project} />

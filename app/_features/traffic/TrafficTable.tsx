@@ -1,7 +1,7 @@
 "use client";
 import type { KeyboardEvent } from "react";
 import { EmptyState } from "@/app/_ui";
-import type { TrafficEntry } from "./sample-traffic";
+import type { TrafficEntry } from "@/src/store/types";
 import { TrafficRow } from "./TrafficRow";
 import styles from "./traffic.module.css";
 
@@ -13,7 +13,7 @@ type Props = {
 
 export function TrafficTable({ entries, selectedId, onSelect }: Props) {
   if (entries.length === 0) {
-    return <EmptyState title="No traffic" body="Sample log is empty." />;
+    return <EmptyState title="No traffic" body="No requests recorded yet." />;
   }
 
   // ArrowUp/Down select the sibling row and move focus (roving tabindex).
@@ -38,6 +38,7 @@ export function TrafficTable({ entries, selectedId, onSelect }: Props) {
             <th scope="col">Method</th>
             <th scope="col">Endpoint</th>
             <th scope="col">Status</th>
+            <th scope="col">Rule</th>
             <th scope="col">Time</th>
             <th scope="col">Duration</th>
           </tr>

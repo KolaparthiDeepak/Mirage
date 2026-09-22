@@ -1,17 +1,24 @@
-# mockservers
+# Mirage
+
+_Formerly `mockservers` — same repo, same URLs, new name. See_
+_[`docs/plans/mirage/25-rename-to-mirage.md`](docs/plans/mirage/25-rename-to-mirage.md)._
 
 ## What it is
 
-`mockservers` is a single hosted service that serves configurable mock HTTP endpoints from
+Mirage is a single hosted service that serves configurable mock HTTP endpoints from
 definitions kept as files in this repository. Each **project** (`mocks/<slug>/`) declares its
 endpoints with match rules and/or an imported OpenAPI 3 spec; response selection is driven by
 the request (method, path, headers, query, JSON body), so you can steer a real downstream
 workflow through any branch by choosing input values. No database, no runtime persistence, no
-arbitrary user JavaScript. Full design: [`docs/specs/2026-08-28-mockservers-design.md`](docs/specs/2026-08-28-mockservers-design.md).
+arbitrary user JavaScript. Original design:
+[`docs/specs/2026-08-28-mockservers-design.md`](docs/specs/2026-08-28-mockservers-design.md).
+Current roadmap: [`docs/specs/2026-09-09-mirage-product-design.md`](docs/specs/2026-09-09-mirage-product-design.md)
+and [`docs/plans/mirage/`](docs/plans/mirage/00-index.md).
 
 ## Live
 
-**Live:** https://mockservers.dailyuze.com _(pending first deploy + DNS — see Deploy / DNS below)_
+**Live:** https://mockservers.dailyuze.com _(pending first deploy + DNS — see Deploy / DNS below;_
+_moving to `mirage.dailyuze.com` per plan 25, with the old host kept redirecting)_
 
 - Viewer (read-only project/route browser): `/`
 - Health: `GET /__mock/health`
@@ -60,11 +67,40 @@ and `/__mock/projects` reachable. For the same reason `/m/<slug>/__spec` is hand
 
 ## Deploy / DNS
 
-- **Vercel Hobby**, project imported from `github.com/KolaparthiDeepak/mockservers` under the
-  owner's personal GitHub. Production deploys on merge to `main`; previews per PR.
-- **Domain:** add `mockservers.dailyuze.com` in Vercel → Settings → Domains. Then in GoDaddy
-  DNS add a CNAME: `mockservers` → `cname.vercel-dns.com`. TLS is auto-issued. Owning
-  `dailyuze.com` already confers every subdomain; only a *wildcard* would need Vercel Pro.
+- **Vercel Hobby**, project imported from `github.com/KolaparthiDeepak/Mirage` (renamed from
+  `mockservers`; GitHub redirects the old path indefinitely) under the owner's personal GitHub.
+  Production deploys on merge to `main`; previews per PR.
+- **Domain:** `mockservers.dailyuze.com` is live today. Plan 25 adds `mirage.dailyuze.com`
+  alongside it in Vercel → Settings → Domains (CNAME `mirage` → `cname.vercel-dns.com` in
+  GoDaddy DNS) and 301s the old host to the new one, path preserved — the old host keeps
+  resolving, since someone's mock URL depends on it. Owning `dailyuze.com` already confers
+  every subdomain; only a *wildcard* would need Vercel Pro.
+
+## Self-hosting
+
+`docker run mirage` — one container, SQLite, no cloud. See `docs/plans/mirage/20-self-host.md`
+for the design; in short:
+
+```
+docker build -t mirage .
+docker run -p 3000:3000 -v ./data:/data mirage                              # persistent store
+docker run -p 3000:3000 -v ./mocks:/mocks:ro -e MIRAGE_MOCKS_DIR=/mocks mirage  # CI: mount, read-only
+```
+
+- `MIRAGE_DB_PATH` (default `/data/mirage.db`) is the only integration the SQLite driver needs —
+  it was already built and conformance-tested for local dev (plan 02), nothing new to write.
+- `MIRAGE_MOCKS_DIR` compiles the mounted directory at runtime instead of the build-time bundle
+  or the store (`src/store/files-source.ts`) — the fastest path to evaluating the project: point
+  a CI service container at a real `mocks/` tree with no rebuild.
+- `MIRAGE_SELF_HOST_CRON=on` (off by default) starts an in-process sweep of enabled alerts (plan
+  21) and drift checks (plan 22) every 5 minutes (`MIRAGE_SELF_HOST_CRON_INTERVAL_MS` to change
+  that), via `instrumentation.ts` — the closest thing to Vercel Cron a single long-lived
+  container has.
+- `npm run backup -- /data/mirage.db /backups/mirage-$(date +%F).db` snapshots the live database
+  (WAL-consistent, via better-sqlite3's own online backup API — safe while the server keeps
+  writing to it). `npm run restore -- <backup> /data/mirage.db` restores one. Both are thin
+  wrappers around `src/store/backup.ts`, which has its own test that runs the actual drill —
+  write data, back up, destroy the original, restore, verify — on every commit.
 
 ## Deferred
 
@@ -81,7 +117,7 @@ Each gets its own spec later (see design doc section 13):
    per-project counter store.
 5. **Multi-tenant / hosted-for-others** — auth, workspace isolation, quotas, abuse controls.
 6. **OpenAPI schema faking** — synthesize response bodies for operations lacking examples.
-7. **Wildcard subdomains** — `<project>.mockservers.dailyuze.com` (Vercel Pro).
+7. **Wildcard subdomains** — `<project>.mirage.dailyuze.com` (Vercel Pro).
 
 ## Repo conventions
 

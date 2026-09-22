@@ -4,15 +4,12 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 
 export interface Env { id: string; name: string; baseUrl: string }
 export interface Variable { id: string; key: string; value: string; scope: "Global" | "Project" | "QA" | "Local" }
-export interface ScenarioStep { id: string; endpointKey: string; expectedStatus: number }
-export interface Scenario { id: string; name: string; steps: ScenarioStep[] }
 export interface DraftRule { id: string; field: string; op: string; value: string; caseId: string }
 
 export interface PreviewState {
   environments: Env[];
   activeEnvId: string;
   variables: Variable[];
-  scenarios: Record<string, Scenario[]>;
   rulesDraft: Record<string, DraftRule[]>;
 }
 
@@ -21,10 +18,12 @@ export interface PreviewState {
 // "Add environment" modal.
 export const SEED_ENVIRONMENTS: Env[] = [{ id: "local", name: "Local", baseUrl: "" }];
 
-const KEY = "mockservers-preview";
+// Per-tab and disposable (plan 17 replaces this store), so unlike theme.ts this
+// needs no legacy-key fallback for the mockservers -> Mirage rename (plan 25).
+const KEY = "mirage-preview";
 
 function initial(): PreviewState {
-  return { environments: SEED_ENVIRONMENTS, activeEnvId: "local", variables: [], scenarios: {}, rulesDraft: {} };
+  return { environments: SEED_ENVIRONMENTS, activeEnvId: "local", variables: [], rulesDraft: {} };
 }
 
 function load(): PreviewState {

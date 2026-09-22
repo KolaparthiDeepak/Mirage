@@ -1,14 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { resolveJsonPath } from "./match";
+import type { TemplateContext } from "./types";
 
 export class TemplateError extends Error {}
 
-export interface TemplateContext {
-  body: unknown;
-  path: Record<string, string>;
-  query: Record<string, string>;
-  header: Record<string, string>;
-}
+export type { TemplateContext };
 
 const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
 const IDENT = "[A-Za-z0-9_\\-]+";
@@ -21,6 +17,10 @@ const PATTERNS: RegExp[] = [
   /^now$/,
   /^now\.epochMs$/,
   /^randomInt\s+-?\d+\s+-?\d+$/,
+  // Plan 17: project variables, resolved from config (with per-environment
+  // overrides) at request time. Still an allowlist; a missing var warns and
+  // renders empty like every other token.
+  new RegExp(`^vars\\.${IDENT}$`),
 ];
 
 function isAllowed(expr: string): boolean {
@@ -54,6 +54,7 @@ function evalToken(expr: string, ctx: TemplateContext, warnings: string[]): stri
   else if (expr.startsWith("request.path.")) value = ctx.path[expr.slice("request.path.".length)];
   else if (expr.startsWith("request.query.")) value = ctx.query[expr.slice("request.query.".length)];
   else if (expr.startsWith("request.header.")) value = ctx.header[expr.slice("request.header.".length).toLowerCase()];
+  else if (expr.startsWith("vars.")) value = ctx.vars?.[expr.slice("vars.".length)];
   if (value === undefined || value === null) {
     warnings.push(`template value not found: {{${expr}}}`);
     return "";

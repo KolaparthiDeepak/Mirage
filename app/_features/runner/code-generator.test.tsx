@@ -51,7 +51,7 @@ function renderGen(props: Partial<Parameters<typeof CodeGenerator>[0]> = {}) {
   return render(
     <PreviewProvider>
       <ToastProvider>
-        <EnvProbe id="qa" name="QA" baseUrl="https://qa.mockservers.dailyuze.com" />
+        <EnvProbe id="qa" name="QA" baseUrl="https://qa.mirage.dailyuze.com" />
         <CodeGenerator draft={draft} {...props} />
       </ToastProvider>
     </PreviewProvider>,
@@ -77,7 +77,7 @@ describe("CodeGenerator", () => {
     const pre = container.querySelector("pre")!;
     await waitFor(() =>
       expect(pre.textContent).toContain(
-        "https://qa.mockservers.dailyuze.com/m/x",
+        "https://qa.mirage.dailyuze.com/m/x",
       ),
     );
     expect(pre.textContent).not.toContain("$ORIGIN");

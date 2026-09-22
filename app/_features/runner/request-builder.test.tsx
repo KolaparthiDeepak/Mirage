@@ -167,7 +167,7 @@ describe("RequestBuilder × active environment", () => {
     render(
       <PreviewProvider>
         <ToastProvider>
-          <EnvProbe id="qa" name="QA" baseUrl="https://qa.mockservers.dailyuze.com" />
+          <EnvProbe id="qa" name="QA" baseUrl="https://qa.mirage.dailyuze.com" />
           <RequestBuilder case_={envFixture} />
         </ToastProvider>
       </PreviewProvider>,
@@ -181,7 +181,7 @@ describe("RequestBuilder × active environment", () => {
     fireEvent.click(screen.getByText("env-qa"));
 
     await waitFor(() =>
-      expect(input.value).toContain("qa.mockservers.dailyuze.com"),
+      expect(input.value).toContain("qa.mirage.dailyuze.com"),
     );
     expect(screen.getByText("env: QA")).toBeDefined();
 
@@ -189,7 +189,7 @@ describe("RequestBuilder × active environment", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(fetchMock.mock.calls[0]![0]).toBe(input.value);
     expect(fetchMock.mock.calls[0]![0]).toBe(
-      "https://qa.mockservers.dailyuze.com/m/card-block-lost/commands/x/GET_CARD/v1",
+      "https://qa.mirage.dailyuze.com/m/card-block-lost/commands/x/GET_CARD/v1",
     );
   });
 });

@@ -1,7 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { MethodPill, StatusCode } from "@/app/_ui";
 import { commandCode } from "@/app/_lib/endpoint-label";
-import type { TrafficEntry } from "./sample-traffic";
+import type { TrafficEntry } from "@/src/store/types";
 import styles from "./traffic.module.css";
 
 type Props = {
@@ -38,8 +38,17 @@ export function TrafficRow({ entry, selected, tabbable = selected, onSelect }: P
       <td data-label="Status">
         <StatusCode code={entry.status} />
       </td>
-      <td className={`${styles.muted} ${styles.tabular}`} data-label="Time">{entry.at}</td>
-      <td className={styles.tabular} data-label="Duration">{entry.ms} ms</td>
+      <td data-label="Rule">
+        {entry.viaUpstream ? (
+          <span className={styles.upstreamTag}>upstream</span>
+        ) : (
+          entry.matchedRuleId ?? <span className={styles.muted}>unmatched</span>
+        )}
+      </td>
+      <td className={`${styles.muted} ${styles.tabular}`} data-label="Time">
+        {new Date(entry.at).toLocaleTimeString()}
+      </td>
+      <td className={styles.tabular} data-label="Duration">{entry.durationMs} ms</td>
     </tr>
   );
 }

@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.data
+mocks.generated.json
+tsconfig.tsbuildinfo
+.idea
+.junie
+.superpowers
+*.log

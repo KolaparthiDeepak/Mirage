@@ -1,15 +1,26 @@
 import { allMatch, matchPath, methodMatches } from "./match";
 import { renderDeep, renderTemplate, type TemplateContext } from "./template";
+import { resolveVars } from "./vars";
 import type { MockResponse, ParsedRequest, ProjectConfig, ResolveResult } from "./types";
 
-function stripBasePath(path: string, basePath: string | undefined): string {
+const ENV_HEADER = "x-mirage-env";
+
+/** Returns the basePath-relative path, or null when the request is outside the
+ *  basePath entirely. Returning the path unchanged (as this did) let a request
+ *  that omitted the basePath match a basePath-relative route and get a 200.
+ *  Exported for explain.ts (plan 06) — one implementation, not two that can
+ *  silently drift apart on exactly this kind of edge case. */
+export function stripBasePath(path: string, basePath: string | undefined): string | null {
   if (!basePath) return path;
   if (path === basePath) return "/";
   if (path.startsWith(basePath + "/")) return path.slice(basePath.length);
-  return path;
+  return null;
 }
 
-function buildResponse(
+/** Exported for src/state/apply.ts (plan 10) — one implementation of
+ *  response-building, whether the variant comes from resolve() or the state
+ *  layer. */
+export function buildResponse(
   response: MockResponse,
   ctx: TemplateContext,
   warnings: string[],
@@ -24,9 +35,22 @@ function buildResponse(
   return { status: response.status, headers, body };
 }
 
+function envOf(req: ParsedRequest, project: ProjectConfig): string | undefined {
+  return req.headers[ENV_HEADER] || project.defaultEnvironment;
+}
+
+function notFound(req: ParsedRequest, project: ProjectConfig, warnings: string[]): ResolveResult {
+  const vars = resolveVars(project.variables, envOf(req, project));
+  const ctx: TemplateContext = { body: req.body, path: {}, query: req.query, header: req.headers, vars };
+  const built = buildResponse(project.defaults.notFound, ctx, warnings);
+  return { ...built, matchedRuleId: null, delayMs: project.defaults.delayMs, warnings };
+}
+
 export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResult {
-  const path = stripBasePath(req.path, project.basePath);
   const warnings: string[] = [];
+  const vars = resolveVars(project.variables, envOf(req, project));
+  const path = stripBasePath(req.path, project.basePath);
+  if (path === null) return notFound(req, project, warnings);
 
   for (const route of project.routes) {
     if (!methodMatches(route.method, req.method)) continue;
@@ -34,12 +58,18 @@ export function resolve(req: ParsedRequest, project: ProjectConfig): ResolveResu
     if (!pm.matched) continue;
     if (!allMatch(route.match, req)) continue;
 
-    const ctx: TemplateContext = { body: req.body, path: pm.params, query: req.query, header: req.headers };
+    const ctx: TemplateContext = { body: req.body, path: pm.params, query: req.query, header: req.headers, vars };
     const built = buildResponse(route.response, ctx, warnings);
-    return { ...built, matchedRuleId: route.id, delayMs: project.defaults.delayMs, warnings };
+    return {
+      ...built,
+      matchedRuleId: route.id,
+      delayMs: project.defaults.delayMs,
+      warnings,
+      // Plan 10: handed to the mock route for src/state/apply.ts; ignored here.
+      matchedRoute: route,
+      templateContext: ctx,
+    };
   }
 
-  const ctx: TemplateContext = { body: req.body, path: {}, query: req.query, header: req.headers };
-  const built = buildResponse(project.defaults.notFound, ctx, warnings);
-  return { ...built, matchedRuleId: null, delayMs: project.defaults.delayMs, warnings };
+  return notFound(req, project, warnings);
 }

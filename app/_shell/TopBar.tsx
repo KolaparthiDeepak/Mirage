@@ -6,6 +6,7 @@ import { Kbd } from "@/app/_ui";
 import { getTheme, toggleTheme, type Theme } from "@/app/_lib/theme";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { GlobalSearch } from "./GlobalSearch";
+import { AdminTokenModal } from "./AdminTokenModal";
 import styles from "./shell.module.css";
 
 export function TopBar({
@@ -20,6 +21,7 @@ export function TopBar({
 
   const [theme, setThemeState] = useState<Theme>("obsidian");
   useEffect(() => setThemeState(getTheme()), []);
+  const [tokenModalOpen, setTokenModalOpen] = useState(false);
 
   return (
     <header className={styles.topbar}>
@@ -67,6 +69,15 @@ export function TopBar({
         </span>
         <button
           type="button"
+          aria-label="Set admin token"
+          title="Set admin token — required to create, edit or delete mocks"
+          className={styles.themeBtn}
+          onClick={() => setTokenModalOpen(true)}
+        >
+          🔑
+        </button>
+        <button
+          type="button"
           aria-label={theme === "paper" ? "Switch to dark theme" : "Switch to light theme"}
           title={theme === "paper" ? "Switch to dark theme" : "Switch to light theme"}
           className={styles.themeBtn}
@@ -78,6 +89,7 @@ export function TopBar({
           {theme === "paper" ? "☀" : "☾"}
         </button>
       </div>
+      <AdminTokenModal open={tokenModalOpen} onClose={() => setTokenModalOpen(false)} />
     </header>
   );
 }

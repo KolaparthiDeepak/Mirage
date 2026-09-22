@@ -1,11 +1,15 @@
 export type Theme = "paper" | "obsidian";
 
-const KEY = "mockservers-theme";
+const KEY = "mirage-theme";
+// Read once more under the pre-rename key so an existing user's choice survives
+// the rename (plan 25). Drop this fallback once that release has aged out.
+const LEGACY_KEY = "mockservers-theme";
 
 export function getTheme(): Theme {
   if (typeof document === "undefined") return "obsidian";
   try {
-    return localStorage.getItem(KEY) === "paper" ? "paper" : "obsidian";
+    const stored = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
+    return stored === "paper" ? "paper" : "obsidian";
   } catch {
     return document.documentElement.dataset.theme === "paper" ? "paper" : "obsidian";
   }
