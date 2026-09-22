@@ -47,8 +47,8 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Overview" })).toBeDefined();
     // Rules is live now (Phase 5.2)
     expect(screen.getByRole("link", { name: "Rules" })).toBeDefined();
-    // Scenarios is live now (Phase 5.3)
-    expect(screen.getByRole("link", { name: "Scenarios" })).toBeDefined();
+    // Scenarios (the canvas) was deleted; Flows (plan 16) replaces its nav slot
+    expect(screen.getByRole("link", { name: "Flows" })).toBeDefined();
     // workspace Traffic is live now (Phase 4)
     expect(screen.getByRole("link", { name: "Traffic" })).toBeDefined();
     // project Environments is live now (Phase 4.2)

@@ -1,0 +1,15 @@
+{
+  "name": "@mirage/engine",
+  "version": "0.1.0",
+  "description": "The pure, dependency-free request resolver Mirage's hosted service runs — packaged so a consumer's test suite can run the exact same resolver against the exact same rule files.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {},
+  "publishConfig": {
+    "access": "public"
+  }
+}

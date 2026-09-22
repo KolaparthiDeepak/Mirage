@@ -44,6 +44,17 @@ export interface ResponseVariants {
   sessionHeader?: string;
 }
 
+/** Plan 12 — an async callback fired after the response. resolve() never
+ *  reads this; the mock route schedules delivery. */
+export interface CallbackConfig {
+  url: string;
+  method: "POST" | "PUT" | "PATCH" | "GET" | "DELETE";
+  delayMs: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+  retry?: { attempts: number; backoffMs: number };
+}
+
 export interface Route {
   id: string;
   method: HttpMethod | "*";
@@ -52,6 +63,8 @@ export interface Route {
   match?: MatchCondition[];
   response: MockResponse;
   responses?: ResponseVariants;          // plan 10 — absent means "not stateful"
+  callback?: CallbackConfig;             // plan 12 — absent means "no callback"
+  drift?: { ignorePaths: string[]; acknowledgeUnsafeMethod: boolean }; // plan 22
 }
 
 /** Plan 07. Passive data on ProjectConfig: `resolve()` never reads it — the
@@ -95,6 +108,35 @@ export interface ProjectConfig {
   openApiDoc?: unknown;                  // merged OpenAPI, if any
   upstream?: UpstreamConfig;             // plan 07 — absent means "off"
   faults?: FaultsConfig;                 // plan 11 — absent / enabled:false means "off"
+  variables?: ProjectVariable[];         // plan 17
+  defaultEnvironment?: string;           // plan 17 — used when x-mirage-env is absent
+  contract?: ContractConfig;             // plan 13
+  docs?: DocsConfig;                     // plan 18
+  drift?: DriftConfig;                   // plan 22 — absent / enabled:false means "off"
+}
+
+/** Plan 13. */
+export interface ContractConfig {
+  validate?: boolean;
+  enforce: boolean;
+  rejectInvalid: boolean;
+}
+
+/** Plan 18 — the public docs portal (/d/:slug). Absent/enabled:false means
+ *  the docs route 404s for anyone. */
+export interface DocsConfig {
+  enabled: boolean;
+  description?: string;
+}
+
+/** Plan 22 — drift detection against upstream. resolve() never reads this;
+ *  it is read only by the drift-check orchestrator (src/drift/*). */
+export interface DriftConfig {
+  enabled: boolean;
+  allowUnsafeMethods: boolean;
+  compareCosmetic: boolean;
+  schedule: "manual" | "daily" | "weekly";
+  specUrl?: string;
 }
 
 export interface ResolveResult {
@@ -117,4 +159,19 @@ export interface TemplateContext {
   path: Record<string, string>;
   query: Record<string, string>;
   header: Record<string, string>;
+  /** Plan 17: project variables resolved for the request's environment.
+   *  Absent → `{{vars.*}}` renders empty with a warning, like any missing token. */
+  vars?: Record<string, unknown>;
+}
+
+/** Plan 17. Variables belong to the project and are shared; `overrides` swap
+ *  the value per environment (selected by the `x-mirage-env` header). A
+ *  `secret` variable is never returned by a read API and is rejected at save
+ *  if referenced in a response body. */
+export interface ProjectVariable {
+  key: string;
+  value?: unknown;
+  scope: "project";
+  secret?: boolean;
+  overrides?: Record<string, unknown>;
 }

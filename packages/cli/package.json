@@ -1,0 +1,21 @@
+{
+  "name": "mirage-cli",
+  "version": "0.1.0",
+  "description": "Run Mirage mock projects locally, offline, with hot reload — plus compile-and-validate for CI. The CLI half of the hosted service; see plan 19.",
+  "type": "module",
+  "bin": {
+    "mirage": "./bin/mirage.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@mirage/engine": "0.1.0",
+    "yaml": "2.7.0",
+    "zod": "3.24.1",
+    "@apidevtools/swagger-parser": "10.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

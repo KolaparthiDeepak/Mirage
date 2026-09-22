@@ -26,6 +26,7 @@ function entry(over: Partial<TrafficEntry> = {}): TrafficEntry {
     configVersion: 1,
     truncated: false,
     viaUpstream: false,
+    direction: "inbound",
     ...over,
   };
 }

@@ -6,7 +6,34 @@ import { assertResponseValid, toRoute } from "@/src/compile/compile";
 import { ruleSchema, type Rule } from "@/src/compile/schema";
 import { methodSubsumes, segmentsSubsume } from "@/src/engine/match";
 import { TemplateError } from "@/src/engine/template";
+import { collectVarRefs } from "@/src/engine/vars";
 import type { StoredProject, StoredRule } from "@/src/store/types";
+
+/** Plan 17: a `secret` variable in a mock response body would be exfiltrated
+ *  by anyone calling the public URL. Rejected at save. */
+export function checkNoSecretVarsInResponse(rule: Rule, project: StoredProject): Response | null {
+  const secrets = new Set((project.variables ?? []).filter((v) => v.secret).map((v) => v.key));
+  if (secrets.size === 0) return null;
+  const responses = rule.response ? [rule.response] : (rule.responses?.variants ?? []);
+  for (const resp of responses) {
+    for (const ref of collectVarRefs(resp.body)) {
+      if (secrets.has(ref)) {
+        return Response.json(
+          { error: `response body references secret variable "${ref}" — secrets cannot be used in a response` },
+          { status: 400 },
+        );
+      }
+    }
+  }
+  return null;
+}
+
+/** Plan 15: attribution. The admin token is a single shared secret with no
+ *  user behind it — record that honestly rather than inventing an identity.
+ *  Takes the request so it can carry a token name once plan 14 gives us one. */
+export function actorFromRequest(req?: Request): string {
+  return req?.headers.get("x-mirage-actor") || "admin-token";
+}
 
 export function requireStoreManaged(project: StoredProject): Response | null {
   if (project.source === "repo") {

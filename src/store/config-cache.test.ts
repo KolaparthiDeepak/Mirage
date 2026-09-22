@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearConfigCache, getConfig, invalidateConfig } from "./config-cache";
+import { clearConfigCache, getCacheStats, getConfig, invalidateConfig } from "./config-cache";
 import type { Store, StoredProject } from "./types";
 
 function stubProject(name: string): StoredProject {
@@ -27,6 +27,32 @@ function fakeStore(getProject: Store["getProject"]): Store {
     bumpCounter: async () => 1,
     resetCounters: async () => 0,
     pruneCounters: async () => 0,
+    listConfigEvents: async () => [],
+    getConfigEvent: async () => null,
+    pruneConfigEvents: async () => 0,
+    saveFlow: async () => {},
+    getFlow: async () => null,
+    listFlows: async () => [],
+    deleteFlow: async () => {},
+    saveFlowRun: async () => {},
+    getFlowRun: async () => null,
+    listFlowRuns: async () => [],
+    pruneFlowRuns: async () => 0,
+    saveView: async () => {},
+    getView: async () => null,
+    listViews: async () => [],
+    deleteView: async () => {},
+    saveAlert: async () => {},
+    getAlert: async () => null,
+    listAlerts: async () => [],
+    listAllEnabledAlerts: async () => [],
+    deleteAlert: async () => {},
+    updateAlertState: async () => {},
+    countTraffic: async () => 0,
+    saveDriftReport: async () => {},
+    getDriftReport: async () => null,
+    listDriftReports: async () => [],
+    deleteDriftReport: async () => {},
     close: async () => {},
   };
 }
@@ -105,5 +131,19 @@ describe("config-cache", () => {
     const getProject = vi.fn<Store["getProject"]>().mockRejectedValue(new Error("connection refused"));
     const store = fakeStore(getProject);
     await expect(getConfig(store, "p")).rejects.toThrow("connection refused");
+  });
+
+  it("getCacheStats tracks hits/misses across reads (plan 24)", async () => {
+    const getProject = vi.fn(async () => stubProject("v1"));
+    const store = fakeStore(getProject);
+
+    expect(getCacheStats()).toEqual({ hits: 0, misses: 0, hitRate: null, size: 0 });
+
+    await getConfig(store, "p"); // miss: nothing cached yet
+    await getConfig(store, "p"); // hit: still within TTL
+    await getConfig(store, "p"); // hit
+
+    const stats = getCacheStats();
+    expect(stats).toEqual({ hits: 2, misses: 1, hitRate: 2 / 3, size: 1 });
   });
 });

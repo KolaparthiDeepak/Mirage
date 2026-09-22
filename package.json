@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=20"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "compile": "tsx scripts/compile-cli.ts",
     "postinstall": "tsx scripts/compile-cli.ts || true",
@@ -20,10 +23,14 @@
     "test:watch": "vitest",
     "check": "node scripts/check.mjs",
     "new-project": "node scripts/new-project.mjs",
-    "sync": "tsx scripts/sync-cli.ts"
+    "sync": "tsx scripts/sync-cli.ts",
+    "backup": "tsx scripts/backup-sqlite.ts",
+    "restore": "tsx scripts/restore-sqlite.ts"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "10.1.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "better-sqlite3": "^13.0.3",
     "next": "15.5.24",
     "postgres": "^3.4.9",

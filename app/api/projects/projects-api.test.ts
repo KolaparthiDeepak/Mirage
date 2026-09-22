@@ -251,6 +251,63 @@ describe("projects write API (plan 03)", () => {
     expect(updated!.basePath).toBe("/api");
   });
 
+  it("PATCH /api/projects/:slug enables and disables the docs portal (plan 18)", async () => {
+    await seedProject("docsme");
+    const { PATCH } = await import("./[slug]/route");
+    const on = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ docs: { enabled: true, description: "Hi" } }) }),
+      ctx({ slug: "docsme" }),
+    );
+    expect(on.status).toBe(200);
+    expect((await store.getProject("docsme"))!.docs).toEqual({ enabled: true, description: "Hi" });
+
+    const rejected = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ docs: { enabled: true, logo: "nope" } }) }),
+      ctx({ slug: "docsme" }),
+    );
+    expect(rejected.status).toBe(400);
+
+    const off = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ docs: null }) }),
+      ctx({ slug: "docsme" }),
+    );
+    expect(off.status).toBe(200);
+    expect((await store.getProject("docsme"))!.docs).toBeUndefined();
+  });
+
+  it("PATCH /api/projects/:slug enables and disables drift detection (plan 22)", async () => {
+    await seedProject("driftme");
+    const { PATCH } = await import("./[slug]/route");
+    const on = await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ drift: { enabled: true, allowUnsafeMethods: false, compareCosmetic: false, schedule: "weekly" } }),
+      }),
+      ctx({ slug: "driftme" }),
+    );
+    expect(on.status).toBe(200);
+    expect((await store.getProject("driftme"))!.drift).toEqual({
+      enabled: true,
+      allowUnsafeMethods: false,
+      compareCosmetic: false,
+      schedule: "weekly",
+    });
+
+    const rejected = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ drift: { schedule: "hourly" } }) }),
+      ctx({ slug: "driftme" }),
+    );
+    expect(rejected.status).toBe(400);
+
+    const off = await PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ drift: null }) }),
+      ctx({ slug: "driftme" }),
+    );
+    expect(off.status).toBe(200);
+    expect((await store.getProject("driftme"))!.drift).toBeUndefined();
+  });
+
   it("PATCH /api/projects/:slug rejects an upstream URL pointing at a private address (plan 07)", async () => {
     await seedProject("ssrf");
     const { PATCH } = await import("./[slug]/route");
@@ -281,6 +338,127 @@ describe("projects write API (plan 03)", () => {
     );
     expect(res.status).toBe(200);
     expect((await store.getProject("upoff"))!.upstream).toBeUndefined();
+  });
+
+  it("warns (default) then blocks (enforce) a rule that contradicts the OpenAPI spec (plan 13)", async () => {
+    const openApiDoc = {
+      openapi: "3.0.3",
+      paths: {
+        "/o": { post: { responses: { "201": { content: { "application/json": { schema: { type: "object", required: ["n"], properties: { n: { type: "integer" } } } } } } } } },
+      },
+    };
+    await store.saveProject({
+      slug: "contract",
+      name: "C",
+      defaults: { delayMs: 0, cors: true, notFound: { status: 404, body: {} } },
+      source: "store",
+      openApiDoc,
+      configVersion: 0,
+      updatedAt: new Date(0).toISOString(),
+      rules: [],
+    });
+
+    const { POST } = await import("./[slug]/rules/route");
+    const bad = { id: "bad", request: { method: "POST", path: "/o" }, response: { status: 201, body: { n: "not-a-number" } } };
+
+    // warn by default — the rule is still created
+    const warnRes = await POST(new Request("https://x", { method: "POST", headers: AUTH, body: JSON.stringify(bad) }), ctx({ slug: "contract" }));
+    expect(warnRes.status).toBe(201);
+    expect((await warnRes.json()).contractWarnings[0]).toMatch(/n: expected integer/);
+
+    // enforce -> blocked
+    const proj = await store.getProject("contract");
+    await store.saveProject({ ...proj!, contract: { enforce: true, rejectInvalid: false } });
+    clearConfigCache();
+    const blockRes = await POST(
+      new Request("https://x", { method: "POST", headers: AUTH, body: JSON.stringify({ ...bad, id: "bad2" }) }),
+      ctx({ slug: "contract" }),
+    );
+    expect(blockRes.status).toBe(400);
+  });
+
+  it("rejects a rule whose response body references a secret variable (plan 17)", async () => {
+    await seedProject("secrets");
+    const projectRoute = await import("./[slug]/route");
+    await projectRoute.PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ variables: [{ key: "apiKey", value: "sk-live-1", scope: "project", secret: true }] }),
+      }),
+      ctx({ slug: "secrets" }),
+    );
+
+    const { POST } = await import("./[slug]/rules/route");
+    const res = await POST(
+      new Request("https://x", {
+        method: "POST",
+        headers: AUTH,
+        body: JSON.stringify({ id: "leak", request: { method: "GET", path: "/leak" }, response: { status: 200, body: { k: "{{vars.apiKey}}" } } }),
+      }),
+      ctx({ slug: "secrets" }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/secret variable "apiKey"/);
+  });
+
+  it("never returns a secret variable's value (plan 17)", async () => {
+    await seedProject("secretread");
+    const { PATCH } = await import("./[slug]/route");
+    const res = await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ variables: [{ key: "token", value: "sk-live-9", scope: "project", secret: true }] }),
+      }),
+      ctx({ slug: "secretread" }),
+    );
+    const returned = await res.json();
+    expect(returned.variables[0].value).toBe("***");
+    await PATCH(
+      new Request("https://x", {
+        method: "PATCH",
+        headers: AUTH,
+        body: JSON.stringify({ variables: [{ key: "token", value: "***", scope: "project", secret: true }] }),
+      }),
+      ctx({ slug: "secretread" }),
+    );
+    expect((await store.getProject("secretread"))!.variables![0]!.value).toBe("sk-live-9");
+  });
+
+  it("records history for every write and reverts a rule.create (plan 15)", async () => {
+    await seedProject("hist");
+    const rulesRoute = await import("./[slug]/rules/route");
+    const idRoute = await import("./[slug]/rules/[id]/route");
+    const historyRoute = await import("./[slug]/history/route");
+    const revertRoute = await import("./[slug]/history/[eventId]/revert/route");
+
+    await rulesRoute.POST(
+      new Request("https://x", { method: "POST", headers: AUTH, body: JSON.stringify({ id: "h1", request: { method: "GET", path: "/h1" }, response: { status: 200 } }) }),
+      ctx({ slug: "hist" }),
+    );
+    await idRoute.PATCH(
+      new Request("https://x", { method: "PATCH", headers: AUTH, body: JSON.stringify({ id: "h1", request: { method: "GET", path: "/h1" }, response: { status: 201 } }) }),
+      ctx({ slug: "hist", id: "h1" }),
+    );
+
+    const histRes = await historyRoute.GET(new Request("https://x", { headers: AUTH }), ctx({ slug: "hist" }));
+    const { events } = await histRes.json();
+    expect(events.map((e: { kind: string }) => e.kind)).toEqual(["rule.update", "rule.create"]);
+
+    // revert the creation -> the rule is gone
+    const createEvent = events.find((e: { kind: string }) => e.kind === "rule.create");
+    // it changed since (h1 was PATCHed) -> conflict without force
+    const conflict = await revertRoute.POST(new Request("https://x", { method: "POST", headers: AUTH }), ctx({ slug: "hist", eventId: String(createEvent.id) }));
+    expect(conflict.status).toBe(409);
+
+    const forced = await revertRoute.POST(new Request("https://x?force=1", { method: "POST", headers: AUTH }), ctx({ slug: "hist", eventId: String(createEvent.id) }));
+    expect(forced.status).toBe(200);
+    expect((await store.getProject("hist"))!.rules).toHaveLength(0);
+
+    // the revert itself is a new event
+    const after = await (await historyRoute.GET(new Request("https://x", { headers: AUTH }), ctx({ slug: "hist" }))).json();
+    expect(after.events[0].kind).toBe("revert");
   });
 
   it("PATCH /api/projects/:slug 409s on a stale ifVersion", async () => {

@@ -33,7 +33,7 @@ export interface CaseVM {
   request: RequestDraft;
 }
 
-interface OaMediaType {
+export interface OaMediaType {
   example?: unknown;
   examples?: Record<string, { value?: unknown }>;
   schema?: {
@@ -41,23 +41,26 @@ interface OaMediaType {
     properties?: Record<string, { enum?: unknown[]; example?: unknown }>;
   };
 }
-interface OaOperation {
+export interface OaOperation {
   summary?: string;
   requestBody?: { content?: Record<string, OaMediaType> };
 }
-interface OaDoc {
+export interface OaDoc {
   paths?: Record<string, Record<string, OaOperation>>;
 }
 
-function operationFor(doc: OaDoc | undefined, fullPath: string, method: string): OaOperation | undefined {
+/** Exported for src/drift/probe.ts (plan 22): synthesising a drift-check
+ *  probe request needs the exact same request-example lookup this viewer
+ *  uses to synthesise its own curl examples — one implementation, two callers. */
+export function operationFor(doc: OaDoc | undefined, fullPath: string, method: string): OaOperation | undefined {
   return doc?.paths?.[fullPath]?.[method.toLowerCase()];
 }
 
-function jsonMediaType(op: OaOperation | undefined): OaMediaType | undefined {
+export function jsonMediaType(op: OaOperation | undefined): OaMediaType | undefined {
   return op?.requestBody?.content?.["application/json"];
 }
 
-function requestExample(mt: OaMediaType | undefined): Record<string, unknown> | undefined {
+export function requestExample(mt: OaMediaType | undefined): Record<string, unknown> | undefined {
   if (!mt) return undefined;
   if (mt.example && typeof mt.example === "object" && !Array.isArray(mt.example)) {
     return mt.example as Record<string, unknown>;
@@ -68,7 +71,7 @@ function requestExample(mt: OaMediaType | undefined): Record<string, unknown> | 
     : undefined;
 }
 
-function schemaProps(mt: OaMediaType | undefined): Record<string, SchemaProp> | undefined {
+export function schemaProps(mt: OaMediaType | undefined): Record<string, SchemaProp> | undefined {
   const props = mt?.schema?.properties;
   if (!props) return undefined;
   const out: Record<string, SchemaProp> = {};
@@ -76,7 +79,7 @@ function schemaProps(mt: OaMediaType | undefined): Record<string, SchemaProp> | 
   return out;
 }
 
-function requiredProps(mt: OaMediaType | undefined): string[] | undefined {
+export function requiredProps(mt: OaMediaType | undefined): string[] | undefined {
   const req = mt?.schema?.required;
   if (!Array.isArray(req)) return undefined;
   const names = req.filter((x): x is string => typeof x === "string");

@@ -1,12 +1,24 @@
 // Plan 03: PATCH /api/projects/:slug (name/basePath/defaults), DELETE (requires
 // the client to have the user type the slug to confirm — that's a UI gate;
 // the server just deletes on request).
-import { faultsSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
+import { contractSchema, docsSchema, driftSchema, faultsSchema, projectVariableSchema, projectYamlSchema, upstreamSchema } from "@/src/compile/schema";
 import { assertSafeUpstreamUrl, UpstreamError } from "@/src/proxy/ssrf";
 import { invalidateConfig } from "@/src/store/config-cache";
 import { getRuntimeStore } from "@/src/store/runtime-source";
+import type { StoredProject } from "@/src/store/types";
+import { z } from "zod";
 import { checkAdminAuth } from "../../_lib/admin-auth";
-import { checkVersion, requireStoreManaged } from "../../_lib/project-mutations";
+import { actorFromRequest, checkVersion, requireStoreManaged } from "../../_lib/project-mutations";
+
+/** Plan 17: a `secret` variable's value is write-only — never returned by a
+ *  read API. Shown as "***". */
+function stripSecrets(project: StoredProject): StoredProject {
+  if (!project.variables?.some((v) => v.secret)) return project;
+  return {
+    ...project,
+    variables: project.variables.map((v) => (v.secret ? { ...v, value: "***", overrides: undefined } : v)),
+  };
+}
 
 export async function PATCH(
   req: Request,
@@ -28,6 +40,11 @@ export async function PATCH(
     defaults?: Record<string, unknown>;
     upstream?: unknown;
     faults?: unknown;
+    variables?: unknown;
+    defaultEnvironment?: string | null;
+    contract?: unknown;
+    docs?: unknown;
+    drift?: unknown;
     ifVersion?: number;
   };
 
@@ -84,6 +101,60 @@ export async function PATCH(
     }
   }
 
+  // Plan 17: a secret sent back as "***" must not overwrite the stored value.
+  let variables = project.variables;
+  if ("variables" in parsedBody) {
+    const shape = z.array(projectVariableSchema).safeParse(parsedBody.variables);
+    if (!shape.success) {
+      return Response.json({ error: `variables: ${shape.error.issues[0]!.message}` }, { status: 400 });
+    }
+    const priorSecrets = new Map((project.variables ?? []).filter((v) => v.secret).map((v) => [v.key, v]));
+    variables = shape.data.map((v) =>
+      v.secret && v.value === "***" && priorSecrets.has(v.key) ? priorSecrets.get(v.key)! : v,
+    );
+  }
+  const defaultEnvironment =
+    "defaultEnvironment" in parsedBody ? (parsedBody.defaultEnvironment || undefined) : project.defaultEnvironment;
+
+  let contract = project.contract;
+  if ("contract" in parsedBody) {
+    if (parsedBody.contract == null) {
+      contract = undefined;
+    } else {
+      const shape = contractSchema.safeParse(parsedBody.contract);
+      if (!shape.success) {
+        return Response.json({ error: `contract.${shape.error.issues[0]!.path.join(".") || "config"}: ${shape.error.issues[0]!.message}` }, { status: 400 });
+      }
+      contract = shape.data;
+    }
+  }
+
+  let docs = project.docs;
+  if ("docs" in parsedBody) {
+    if (parsedBody.docs == null) {
+      docs = undefined;
+    } else {
+      const shape = docsSchema.safeParse(parsedBody.docs);
+      if (!shape.success) {
+        return Response.json({ error: `docs.${shape.error.issues[0]!.path.join(".") || "config"}: ${shape.error.issues[0]!.message}` }, { status: 400 });
+      }
+      docs = shape.data;
+    }
+  }
+
+  let drift = project.drift;
+  if ("drift" in parsedBody) {
+    if (parsedBody.drift == null) {
+      drift = undefined;
+    } else {
+      const shape = driftSchema.safeParse(parsedBody.drift);
+      if (!shape.success) {
+        return Response.json({ error: `drift.${shape.error.issues[0]!.path.join(".") || "config"}: ${shape.error.issues[0]!.message}` }, { status: 400 });
+      }
+      drift = shape.data;
+    }
+  }
+
   const merged = {
     ...project,
     name: parsedBody.name ?? project.name,
@@ -91,6 +162,11 @@ export async function PATCH(
     defaults: { ...project.defaults, ...(parsedBody.defaults ?? {}) },
     upstream,
     faults,
+    variables,
+    defaultEnvironment,
+    contract,
+    docs,
+    drift,
   };
   const validated = projectYamlSchema.safeParse({ name: merged.name, slug, basePath: merged.basePath, defaults: merged.defaults });
   if (!validated.success) {
@@ -98,9 +174,23 @@ export async function PATCH(
     return Response.json({ error: `${issue.path.join(".") || "project"}: ${issue.message}` }, { status: 400 });
   }
 
-  await store.saveProject(merged);
+  const metaOf = (p: StoredProject) => ({
+    name: p.name, basePath: p.basePath, defaults: p.defaults,
+    upstream: p.upstream, faults: p.faults, contract: p.contract, docs: p.docs, drift: p.drift,
+    defaultEnvironment: p.defaultEnvironment,
+    variables: (p.variables ?? []).map((v) => (v.secret ? { ...v, value: "***" } : v)),
+  });
+  await store.saveProject(merged, {
+    slug,
+    actor: actorFromRequest(req),
+    kind: "project.update",
+    targetId: null,
+    before: metaOf(project),
+    after: metaOf(merged),
+  });
   invalidateConfig(slug);
-  return Response.json(await store.getProject(slug));
+  const saved = await store.getProject(slug);
+  return Response.json(saved ? stripSecrets(saved) : saved);
 }
 
 export async function DELETE(

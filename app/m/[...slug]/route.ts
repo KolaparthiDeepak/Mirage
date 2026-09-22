@@ -6,7 +6,11 @@ import type { UpstreamConfig } from "@/src/engine/types";
 import { proxyUnmatchedRequest } from "@/src/proxy";
 import { applyState } from "@/src/state/apply";
 import { computeFaults, faultRng, mangleBody, type FaultOutcome } from "@/src/faults/apply";
+import { deliverCallback, type CallbackContext } from "@/src/callbacks/deliver";
+import { checkRequestAgainstSpec } from "@/src/contract/request-check";
 import { clientHash, clientIp } from "@/src/store/client-hash";
+import { allowMockRequest } from "@/src/observability/abuse-guard";
+import { logMockEvent } from "@/src/observability/log";
 import { redactBody, redactHeaders } from "@/src/store/redact";
 import { getCurrentConfig, getRuntimeStore } from "@/src/store/runtime-source";
 import { shouldRecord, truncateBody } from "@/src/store/traffic-limits";
@@ -48,6 +52,23 @@ async function recordTrafficEntry(entry: TrafficEntry): Promise<void> {
 
 async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }): Promise<Response> {
   const startedAt = Date.now();
+  // Plan 24: one id per inbound request, reused as this request's traffic
+  // row id and returned as x-mirage-request-id — the thing that makes "a
+  // user's report traceable to its traffic row and its logs" true. A
+  // callback's own outbound attempts (below) get their own ids: those are
+  // separate events, not this request.
+  const requestId = randomUUID();
+
+  // Plan 24: the one fully public, unauthenticated endpoint in this
+  // product gets a per-IP abuse guard, before any real work (including the
+  // store round-trip getCurrentConfig can make) — a rate-limited request
+  // should cost as little as possible to reject.
+  const ip = clientIp(req.headers);
+  const clientKey = ip && clientHash(ip);
+  if (clientKey && !allowMockRequest(clientKey)) {
+    return json(429, { error: "rate limit exceeded" }, { "access-control-allow-origin": "*" });
+  }
+
   const { slug: parts } = await ctx.params;
   const slug = parts[0]!;
   const subPath = "/" + parts.slice(1).join("/");
@@ -115,6 +136,30 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     }
   }
 
+  // Plan 13.2: validate the request against the spec. Never changes the
+  // response; violations are annotated onto the traffic row. With
+  // contract.rejectInvalid the request gets a 400 instead.
+  if (project.contract?.validate && process.env.MIRAGE_CONTRACT !== "off") {
+    try {
+      const violations = await checkRequestAgainstSpec(
+        project.openApiDoc,
+        req.method,
+        result.matchedRoute?.path ?? subPath,
+        result.status,
+        parsed.body,
+        parsed.query,
+      );
+      if (violations.length > 0) {
+        result.warnings.push(...violations.map((v) => `contract: ${v.path}: ${v.message}`));
+        if (project.contract.rejectInvalid) {
+          return json(400, { error: "request violates the OpenAPI contract", violations }, cors);
+        }
+      }
+    } catch (e) {
+      console.error(`[contract] request check failed for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
   // Plan 07: the proxy is strictly a fallback for what the mock does not know.
   // Only an *unmatched* request can reach it, so turning it on can never change
   // a matched rule's behaviour.
@@ -136,7 +181,12 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       return json(429, { error: "upstream rate limit exceeded for this project", slug }, cors);
     }
 
-    const resHeaders: Record<string, string> = { ...outcome.response.headers, ...cors, "x-mock-matched": "false" };
+    const resHeaders: Record<string, string> = {
+      ...outcome.response.headers,
+      ...cors,
+      "x-mock-matched": "false",
+      "x-mirage-request-id": requestId,
+    };
     const rec = outcome.record;
     if (rec && shouldRecord(slug, rec.status, false)) {
       try {
@@ -144,7 +194,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
         const resBody = truncateBody(redactBody(rec.bodyText));
         after(() =>
           recordTrafficEntry({
-            id: randomUUID(),
+            id: requestId,
             slug,
             at: new Date(startedAt).toISOString(),
             method: req.method,
@@ -162,6 +212,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
             configVersion,
             truncated: reqBody.truncated || resBody.truncated || rec.truncated,
             viaUpstream: true,
+            direction: "inbound",
           }),
         );
       } catch (e) {
@@ -169,10 +220,17 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       }
     }
 
-    console.log(JSON.stringify({
-      t: new Date().toISOString(), proj: slug, m: req.method, path: subPath,
-      rule: null, status: outcome.response.status, matched: false, upstream: true,
-    }));
+    logMockEvent({
+      requestId,
+      project: slug,
+      method: req.method,
+      path: subPath,
+      rule: null,
+      status: outcome.response.status,
+      matched: false,
+      warnings: 0,
+      viaUpstream: true,
+    });
     return new Response(outcome.response.bodyText, { status: outcome.response.status, headers: resHeaders });
   }
 
@@ -206,16 +264,16 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     await new Promise((r) => setTimeout(r, totalDelayMs));
   }
 
-  console.log(JSON.stringify({
-    t: new Date().toISOString(),
-    proj: slug,
-    m: req.method,
+  logMockEvent({
+    requestId,
+    project: slug,
+    method: req.method,
     path: subPath,
     rule: result.matchedRuleId,
     status: result.status,
     matched: result.matchedRuleId !== null,
-    warns: result.warnings.length,
-  }));
+    warnings: result.warnings.length,
+  });
 
   const headers: Record<string, string> = {
     ...result.headers,
@@ -224,6 +282,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
     ...(faultOutcome && faultOutcome.notes.length > 0 ? { "x-mirage-fault": faultOutcome.notes.join("; ") } : {}),
     "x-mock-rule-id": result.matchedRuleId ?? "",
     "x-mock-matched": String(result.matchedRuleId !== null),
+    "x-mirage-request-id": requestId,
   };
   let payload: BodyInit | null;
   let resBodyText: string | null;
@@ -267,7 +326,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
       const resBody = truncateBody(redactBody(resBodyText));
       after(() =>
         recordTrafficEntry({
-          id: randomUUID(),
+          id: requestId,
           slug,
           at: new Date(startedAt).toISOString(),
           method: req.method,
@@ -285,10 +344,57 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string[] }> }
           configVersion,
           truncated: reqBody.truncated || resBody.truncated,
           viaUpstream: false,
+          direction: "inbound",
         }),
       );
     } catch (e) {
       console.error(`[traffic] could not schedule recording for "${slug}": ${(e as Error).message}`);
+    }
+  }
+
+  // Plan 12: a matched rule with a callback fires it after the response, in
+  // after() (delay <= 5s — the waitUntil path). Each delivery attempt is
+  // recorded as an *outbound* traffic row so a silent failure is visible.
+  const callback = result.matchedRoute?.callback;
+  if (callback && result.matchedRuleId !== null && process.env.MIRAGE_CALLBACKS !== "off") {
+    const cbCtx: CallbackContext = {
+      request: { path: result.templateContext?.path ?? {}, query: parsed.query, body: parsed.body },
+      response: { status: result.status, body: result.body },
+    };
+    try {
+      after(async () => {
+        try {
+          if (callback.delayMs > 0) await new Promise((r) => setTimeout(r, Math.min(callback.delayMs, 5000)));
+          const cb = await deliverCallback(slug, callback, cbCtx);
+          for (const a of cb.attempts) {
+            await recordTrafficEntry({
+              id: randomUUID(),
+              slug,
+              at: new Date().toISOString(),
+              method: callback.method,
+              path: a.url,
+              query: {},
+              reqHeaders: {},
+              reqBody: null,
+              status: a.status,
+              resHeaders: {},
+              resBody: a.error ?? null,
+              matchedRuleId: result.matchedRuleId,
+              durationMs: 0,
+              warnings: [...cb.warnings, ...(a.error ? [`callback attempt ${a.attempt}: ${a.error}`] : [])],
+              clientHash: null,
+              configVersion,
+              truncated: false,
+              viaUpstream: false,
+              direction: "outbound",
+            });
+          }
+        } catch (e) {
+          console.error(`[callback] delivery failed for "${slug}": ${(e as Error).message}`);
+        }
+      });
+    } catch (e) {
+      console.error(`[callback] could not schedule for "${slug}": ${(e as Error).message}`);
     }
   }
 

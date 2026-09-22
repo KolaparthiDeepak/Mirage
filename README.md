@@ -76,6 +76,32 @@ and `/__mock/projects` reachable. For the same reason `/m/<slug>/__spec` is hand
   resolving, since someone's mock URL depends on it. Owning `dailyuze.com` already confers
   every subdomain; only a *wildcard* would need Vercel Pro.
 
+## Self-hosting
+
+`docker run mirage` — one container, SQLite, no cloud. See `docs/plans/mirage/20-self-host.md`
+for the design; in short:
+
+```
+docker build -t mirage .
+docker run -p 3000:3000 -v ./data:/data mirage                              # persistent store
+docker run -p 3000:3000 -v ./mocks:/mocks:ro -e MIRAGE_MOCKS_DIR=/mocks mirage  # CI: mount, read-only
+```
+
+- `MIRAGE_DB_PATH` (default `/data/mirage.db`) is the only integration the SQLite driver needs —
+  it was already built and conformance-tested for local dev (plan 02), nothing new to write.
+- `MIRAGE_MOCKS_DIR` compiles the mounted directory at runtime instead of the build-time bundle
+  or the store (`src/store/files-source.ts`) — the fastest path to evaluating the project: point
+  a CI service container at a real `mocks/` tree with no rebuild.
+- `MIRAGE_SELF_HOST_CRON=on` (off by default) starts an in-process sweep of enabled alerts (plan
+  21) and drift checks (plan 22) every 5 minutes (`MIRAGE_SELF_HOST_CRON_INTERVAL_MS` to change
+  that), via `instrumentation.ts` — the closest thing to Vercel Cron a single long-lived
+  container has.
+- `npm run backup -- /data/mirage.db /backups/mirage-$(date +%F).db` snapshots the live database
+  (WAL-consistent, via better-sqlite3's own online backup API — safe while the server keeps
+  writing to it). `npm run restore -- <backup> /data/mirage.db` restores one. Both are thin
+  wrappers around `src/store/backup.ts`, which has its own test that runs the actual drill —
+  write data, back up, destroy the original, restore, verify — on every commit.
+
 ## Deferred
 
 Each gets its own spec later (see design doc section 13):

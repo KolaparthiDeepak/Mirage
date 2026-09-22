@@ -5,3 +5,6 @@ defaults:
   delayMs: 0
   cors: true
   notFound: { status: 404, body: { reason: UNKNOWN_ROUTE } }
+drift:
+  enabled: true
+  schedule: weekly

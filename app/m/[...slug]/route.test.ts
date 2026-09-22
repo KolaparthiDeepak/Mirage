@@ -82,4 +82,13 @@ describe("mock route", () => {
     expect(res.headers.get("x-mock-matched")).toBe("false");
     expect(res.headers.get("x-mock-rule-id")).toBe("");
   });
+  it("stamps every response with a unique x-mirage-request-id (plan 24)", async () => {
+    const a = await call(POST, "https://x/m/demo/commands/verify", { method: "POST", body: "{}" });
+    const b = await call(POST, "https://x/m/demo/commands/verify", { method: "POST", body: "{}" });
+    const idA = a.headers.get("x-mirage-request-id");
+    const idB = b.headers.get("x-mirage-request-id");
+    expect(idA).toBeTruthy();
+    expect(idB).toBeTruthy();
+    expect(idA).not.toBe(idB);
+  });
 });

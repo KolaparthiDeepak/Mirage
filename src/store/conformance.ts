@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { Rule } from "../compile/schema";
-import type { Store, StoredProject, TrafficEntry } from "./types";
+import type { Store, StoredDriftReport, StoredProject, TrafficEntry } from "./types";
 
 function rule(id: string): Rule {
   return { id, request: { method: "GET", path: `/${id}` }, response: { status: 200 } };
@@ -104,6 +104,83 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       };
       await s.saveProject(project(slug, { faults }));
       expect((await s.getProject(slug))?.faults).toEqual(faults);
+    });
+
+    it("round-trips variables and the default environment (plan 17)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("vars");
+      const variables = [
+        { key: "merchantName", value: "Acme", scope: "project" as const },
+        { key: "riskScore", value: 12, scope: "project" as const, overrides: { staging: 85 } },
+      ];
+      await s.saveProject(project(slug, { variables, defaultEnvironment: "prod" }));
+      const back = await s.getProject(slug);
+      expect(back?.variables).toEqual(variables);
+      expect(back?.defaultEnvironment).toBe("prod");
+    });
+
+    it("round-trips the contract config (plan 13)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("contract");
+      const contract = { validate: true, enforce: true, rejectInvalid: false };
+      await s.saveProject(project(slug, { contract }));
+      expect((await s.getProject(slug))?.contract).toEqual(contract);
+    });
+
+    it("round-trips the docs config, off by default (plan 18)", async () => {
+      const s = await get();
+      const withDocs = uniqueSlug("docs-on");
+      const docs = { enabled: true, description: "hello colleagues" };
+      await s.saveProject(project(withDocs, { docs }));
+      expect((await s.getProject(withDocs))?.docs).toEqual(docs);
+
+      const without = uniqueSlug("docs-off");
+      await s.saveProject(project(without));
+      expect((await s.getProject(without))?.docs).toBeUndefined();
+    });
+
+    it("writes a config event in the same transaction as the save (plan 15)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("history");
+      await s.saveProject(project(slug), {
+        slug,
+        actor: "tester",
+        kind: "rule.create",
+        targetId: "r1",
+        before: null,
+        after: { id: "r1" },
+      });
+      await s.saveProject(project(slug, { name: "Renamed" }), {
+        slug,
+        actor: "tester",
+        kind: "project.update",
+        targetId: null,
+        before: { name: "Test Project" },
+        after: { name: "Renamed" },
+      });
+
+      const events = await s.listConfigEvents(slug);
+      expect(events.map((e) => e.kind)).toEqual(["project.update", "rule.create"]); // newest first
+      expect(events[0]!.version).toBe(2);
+      expect(events[1]!.after).toEqual({ id: "r1" });
+      expect(events[1]!.actor).toBe("tester");
+
+      const byRule = await s.listConfigEvents(slug, { targetId: "r1" });
+      expect(byRule).toHaveLength(1);
+
+      const one = await s.getConfigEvent(slug, events[0]!.id);
+      expect(one?.kind).toBe("project.update");
+    });
+
+    it("pruneConfigEvents keeps the newest `keep` regardless of age (plan 15)", async () => {
+      const s = await get();
+      const slug = uniqueSlug("history-prune");
+      for (let i = 0; i < 5; i++) {
+        await s.saveProject(project(slug), { slug, actor: "t", kind: "rule.create", targetId: `r${i}`, before: null, after: {} });
+      }
+      const deleted = await s.pruneConfigEvents(slug, 2, new Date(Date.now() + 60_000));
+      expect(deleted).toBe(3);
+      expect(await s.listConfigEvents(slug)).toHaveLength(2);
     });
 
     it("orders rules by position, independent of insertion order", async () => {
@@ -299,6 +376,60 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       expect(back).toEqual(e);
     });
 
+    // --- plan 16: flows ---
+
+    it("round-trips a flow definition and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow");
+      const now = new Date(0).toISOString();
+      await s.saveFlow({ id: "f1", slug, name: "Happy path", definition: { steps: [1] }, createdAt: now, updatedAt: now });
+      const back = await s.getFlow(slug, "f1");
+      expect(back?.name).toBe("Happy path");
+      expect(back?.definition).toEqual({ steps: [1] });
+
+      await s.saveFlow({ id: "f1", slug, name: "Renamed", definition: { steps: [1, 2] }, createdAt: now, updatedAt: now });
+      expect((await s.getFlow(slug, "f1"))?.name).toBe("Renamed");
+      expect(await s.listFlows(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown flow and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow-del");
+      expect(await s.getFlow(slug, "nope")).toBeNull();
+      const now = new Date(0).toISOString();
+      await s.saveFlow({ id: "f1", slug, name: "X", definition: {}, createdAt: now, updatedAt: now });
+      await s.deleteFlow(slug, "f1");
+      expect(await s.getFlow(slug, "f1")).toBeNull();
+    });
+
+    it("round-trips a flow run and lists runs newest-first for one flow", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow-run");
+      const older = { id: crypto.randomUUID(), slug, flowId: "f1", startedAt: "2026-01-01T00:00:00.000Z", finishedAt: "2026-01-01T00:00:01.000Z", status: "passed" as const, results: [{ name: "s1" }] };
+      const newer = { id: crypto.randomUUID(), slug, flowId: "f1", startedAt: "2026-01-02T00:00:00.000Z", finishedAt: null, status: "running" as const, results: [] };
+      await s.saveFlowRun(older);
+      await s.saveFlowRun(newer);
+      await s.saveFlowRun({ ...newer, id: crypto.randomUUID(), flowId: "other-flow" });
+
+      const runs = await s.listFlowRuns(slug, "f1");
+      expect(runs.map((r) => r.id)).toEqual([newer.id, older.id]);
+
+      const fetched = await s.getFlowRun(slug, older.id);
+      expect(fetched?.results).toEqual([{ name: "s1" }]);
+    });
+
+    it("pruneFlowRuns deletes runs older than the cutoff", async () => {
+      const s = await get();
+      const slug = uniqueSlug("flow-run-prune");
+      await s.saveFlowRun({ id: crypto.randomUUID(), slug, flowId: "f1", startedAt: "2020-01-01T00:00:00.000Z", finishedAt: null, status: "passed", results: [] });
+      const recent = { id: crypto.randomUUID(), slug, flowId: "f1", startedAt: new Date().toISOString(), finishedAt: null, status: "passed" as const, results: [] };
+      await s.saveFlowRun(recent);
+
+      const deleted = await s.pruneFlowRuns(new Date("2021-01-01"));
+      expect(deleted).toBeGreaterThanOrEqual(1);
+      expect((await s.listFlowRuns(slug, "f1")).map((r) => r.id)).toEqual([recent.id]);
+    });
+
     it("pruneTraffic deletes rows older than the cutoff and keeps newer ones", async () => {
       const s = await get();
       const slug = uniqueSlug("traffic-prune-age");
@@ -365,6 +496,215 @@ export function runStoreConformanceSuite(label: string, make: () => Store | Prom
       const remaining = await s.queryTraffic({ slug, limit: 10 });
       expect(remaining.map((r) => r.id)).toEqual([entries[4]!.id, entries[3]!.id]);
     });
+
+    it("countTraffic matches queryTraffic's row count for the same filter", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-count");
+      await s.recordTraffic(trafficEntry(slug, { method: "GET", status: 200 }));
+      await s.recordTraffic(trafficEntry(slug, { method: "POST", status: 500 }));
+      await s.recordTraffic(trafficEntry(slug, { method: "POST", status: 201 }));
+
+      expect(await s.countTraffic({ slug })).toBe(3);
+      expect(await s.countTraffic({ slug, method: "POST" })).toBe(2);
+      expect(await s.countTraffic({ slug, statusFrom: 500, statusTo: 599 })).toBe(1);
+    });
+
+    it("filters traffic by durationMsFrom for the Slow saved view", async () => {
+      const s = await get();
+      const slug = uniqueSlug("traffic-slow");
+      await s.recordTraffic(trafficEntry(slug, { durationMs: 10 }));
+      const slow = trafficEntry(slug, { durationMs: 900 });
+      await s.recordTraffic(slow);
+
+      const rows = await s.queryTraffic({ slug, durationMsFrom: 500 });
+      expect(rows.map((r) => r.id)).toEqual([slow.id]);
+      expect(await s.countTraffic({ slug, durationMsFrom: 500 })).toBe(1);
+    });
+
+    // --- plan 21: saved views ---
+
+    it("round-trips a saved view and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("view");
+      const now = new Date().toISOString();
+      await s.saveView({ id: "v1", slug, name: "Slow requests", query: { durationMsFrom: 500 }, createdAt: now });
+
+      const back = await s.getView(slug, "v1");
+      expect(back).toMatchObject({ id: "v1", slug, name: "Slow requests", query: { durationMsFrom: 500 } });
+
+      await s.saveView({ id: "v1", slug, name: "Renamed", query: { durationMsFrom: 1000 }, createdAt: now });
+      expect((await s.getView(slug, "v1"))?.name).toBe("Renamed");
+      expect(await s.listViews(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown view and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("view-del");
+      expect(await s.getView(slug, "nope")).toBeNull();
+
+      await s.saveView({ id: "v1", slug, name: "X", query: {}, createdAt: new Date().toISOString() });
+      await s.deleteView(slug, "v1");
+      expect(await s.getView(slug, "v1")).toBeNull();
+    });
+
+    // --- plan 21: alerts ---
+
+    function alertFixture(slug: string, overrides: Partial<Parameters<Store["saveAlert"]>[0]> = {}): Parameters<Store["saveAlert"]>[0] {
+      const now = new Date().toISOString();
+      return {
+        id: randomUUID(),
+        slug,
+        name: "Unmatched spike",
+        view: "unmatched",
+        condition: { kind: "unmatched", gt: 5, windowMinutes: 10 },
+        notify: { webhook: "https://example.com/hook" },
+        cooldownMinutes: 30,
+        enabled: true,
+        lastFiredAt: null,
+        lastRecoveredAt: null,
+        lastError: null,
+        currentlyFiring: false,
+        createdAt: now,
+        updatedAt: now,
+        ...overrides,
+      };
+    }
+
+    it("round-trips an alert and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("alert");
+      const a = alertFixture(slug, { id: "a1" });
+      await s.saveAlert(a);
+
+      const back = await s.getAlert(slug, "a1");
+      expect(back).toMatchObject({ id: "a1", slug, name: "Unmatched spike", view: "unmatched", enabled: true });
+
+      await s.saveAlert({ ...a, name: "Renamed", enabled: false });
+      const updated = await s.getAlert(slug, "a1");
+      expect(updated?.name).toBe("Renamed");
+      expect(updated?.enabled).toBe(false);
+      expect(await s.listAlerts(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown alert and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("alert-del");
+      expect(await s.getAlert(slug, "nope")).toBeNull();
+
+      await s.saveAlert(alertFixture(slug, { id: "a1" }));
+      await s.deleteAlert(slug, "a1");
+      expect(await s.getAlert(slug, "a1")).toBeNull();
+    });
+
+    it("listAllEnabledAlerts returns only enabled alerts, across projects", async () => {
+      const s = await get();
+      const slugA = uniqueSlug("alert-enabled-a");
+      const slugB = uniqueSlug("alert-enabled-b");
+      const enabledA = alertFixture(slugA, { id: "a1", enabled: true });
+      const disabledA = alertFixture(slugA, { id: "a2", enabled: false });
+      const enabledB = alertFixture(slugB, { id: "b1", enabled: true });
+      await s.saveAlert(enabledA);
+      await s.saveAlert(disabledA);
+      await s.saveAlert(enabledB);
+
+      const enabled = await s.listAllEnabledAlerts();
+      const ids = enabled.map((a) => a.id);
+      expect(ids).toEqual(expect.arrayContaining(["a1", "b1"]));
+      expect(ids).not.toContain("a2");
+    });
+
+    it("updateAlertState writes firing/recovery/error state without touching config fields", async () => {
+      const s = await get();
+      const slug = uniqueSlug("alert-state");
+      const a = alertFixture(slug, { id: "a1", name: "Original" });
+      await s.saveAlert(a);
+
+      await s.updateAlertState(slug, "a1", {
+        lastFiredAt: "2026-05-01T00:00:00.000Z",
+        lastRecoveredAt: null,
+        lastError: null,
+        currentlyFiring: true,
+      });
+
+      const fired = await s.getAlert(slug, "a1");
+      expect(fired?.name).toBe("Original");
+      expect(fired?.currentlyFiring).toBe(true);
+      expect(fired?.lastFiredAt).toBe("2026-05-01T00:00:00.000Z");
+
+      await s.updateAlertState(slug, "a1", {
+        lastFiredAt: fired!.lastFiredAt,
+        lastRecoveredAt: "2026-05-01T00:10:00.000Z",
+        lastError: null,
+        currentlyFiring: false,
+      });
+      const recovered = await s.getAlert(slug, "a1");
+      expect(recovered?.currentlyFiring).toBe(false);
+      expect(recovered?.lastRecoveredAt).toBe("2026-05-01T00:10:00.000Z");
+    });
+
+    // --- plan 22: drift ---
+
+    it("round-trips a project's drift config", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-config");
+      await s.saveProject(
+        project(slug, {
+          drift: { enabled: true, allowUnsafeMethods: false, compareCosmetic: true, schedule: "daily", specUrl: "/openapi.json" },
+        }),
+      );
+      const back = await s.getProject(slug);
+      expect(back?.drift).toEqual({ enabled: true, allowUnsafeMethods: false, compareCosmetic: true, schedule: "daily", specUrl: "/openapi.json" });
+    });
+
+    function driftReportFixture(slug: string, overrides: Partial<StoredDriftReport> = {}): StoredDriftReport {
+      const now = new Date().toISOString();
+      return {
+        id: "r1",
+        slug,
+        ruleId: "r1",
+        findings: [{ severity: "breaking", path: "$.id", kind: "missing-field", detail: "gone upstream" }],
+        observedResponse: { status: 200, body: { id: null } },
+        error: null,
+        dismissed: false,
+        firstSeenAt: now,
+        lastCheckedAt: now,
+        ...overrides,
+      };
+    }
+
+    it("round-trips a drift report and updates it in place", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-report");
+      await s.saveDriftReport(driftReportFixture(slug));
+
+      const back = await s.getDriftReport(slug, "r1");
+      expect(back).toMatchObject({ id: "r1", ruleId: "r1", dismissed: false });
+      expect(back?.findings).toHaveLength(1);
+
+      await s.saveDriftReport(driftReportFixture(slug, { dismissed: true }));
+      expect((await s.getDriftReport(slug, "r1"))?.dismissed).toBe(true);
+      expect(await s.listDriftReports(slug)).toHaveLength(1);
+    });
+
+    it("returns null for an unknown drift report and deletes cleanly", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-report-del");
+      expect(await s.getDriftReport(slug, "nope")).toBeNull();
+
+      await s.saveDriftReport(driftReportFixture(slug));
+      await s.deleteDriftReport(slug, "r1");
+      expect(await s.getDriftReport(slug, "r1")).toBeNull();
+    });
+
+    it("lists a project's drift reports newest-first", async () => {
+      const s = await get();
+      const slug = uniqueSlug("drift-report-list");
+      await s.saveDriftReport(driftReportFixture(slug, { id: "r1", ruleId: "r1", firstSeenAt: "2026-01-01T00:00:00.000Z" }));
+      await s.saveDriftReport(driftReportFixture(slug, { id: "r2", ruleId: "r2", firstSeenAt: "2026-01-02T00:00:00.000Z" }));
+
+      const reports = await s.listDriftReports(slug);
+      expect(reports.map((r) => r.id)).toEqual(["r2", "r1"]);
+    });
   });
 }
 
@@ -388,6 +728,7 @@ function trafficEntry(slug: string, overrides: Partial<TrafficEntry> = {}): Traf
     configVersion: 1,
     truncated: false,
     viaUpstream: false,
+    direction: "inbound",
     ...overrides,
   };
 }

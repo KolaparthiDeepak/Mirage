@@ -112,12 +112,70 @@ export const faultsSchema = z
   })
   .strict();
 
+// Plan 17 — project variables. `{{vars.key}}` resolves from these at request
+// time; `overrides` swap the value per environment.
+export const projectVariableSchema = z
+  .object({
+    key: z.string().regex(/^[A-Za-z0-9_-]+$/, "variable key must match ^[A-Za-z0-9_-]+$"),
+    value: z.unknown(),
+    scope: z.literal("project").default("project"),
+    secret: z.boolean().optional(),
+    overrides: z.record(z.unknown()).optional(),
+  })
+  .strict();
+
+// Plan 13 — contract validation against the project's OpenAPI doc.
+export const contractSchema = z
+  .object({
+    /** Validate requests at request time. Defaults on for spec-backed
+     *  projects (applied by the caller), off otherwise. */
+    validate: z.boolean().optional(),
+    /** Refuse a rule save whose response body contradicts the spec. */
+    enforce: z.boolean().default(false),
+    /** Return 400 for a request that violates the spec (opt-in). */
+    rejectInvalid: z.boolean().default(false),
+  })
+  .strict();
+
+// Plan 18 — the public docs portal (/d/:slug). Off by default: publishing a
+// project's endpoint shapes is something the owner opts into, never a
+// side effect of creating the project.
+export const docsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Plain text, shown as-is (no markdown parsing) — one field isn't worth
+     *  a markdown+sanitizer dependency. Length-capped against a pathological paste. */
+    description: z.string().max(2000).optional(),
+  })
+  .strict();
+
+// Plan 22 — drift detection against upstream. Opt-in and off by default: a
+// probe fires a real request at a real API, which must never happen as a
+// side effect of anything else. `schedule` is metadata only — the actual
+// cadence is enforced by whoever calls POST /api/cron/drift on a timer, the
+// same deferral the alert sweep (plan 21) makes for its own cron caller.
+export const driftSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    allowUnsafeMethods: z.boolean().default(false),
+    compareCosmetic: z.boolean().default(false),
+    schedule: z.enum(["manual", "daily", "weekly"]).default("manual"),
+    /** Path or absolute URL on the upstream host serving its OpenAPI doc. */
+    specUrl: z.string().min(1).optional(),
+  })
+  .strict();
+
 export const projectYamlSchema = z
   .object({
     name: z.string().min(1),
     slug: z.string().regex(slugRe, "slug must match ^[a-z0-9][a-z0-9-]{0,62}$"),
     upstream: upstreamSchema.optional(),
     faults: faultsSchema.optional(),
+    variables: z.array(projectVariableSchema).optional(),
+    defaultEnvironment: z.string().min(1).optional(),
+    contract: contractSchema.optional(),
+    docs: docsSchema.optional(),
+    drift: driftSchema.optional(),
     // Plan 09: fill schema-only OpenAPI responses with a deterministic fake
     // body. Default true; an existing project with examples throughout is
     // unaffected either way.
@@ -185,6 +243,23 @@ const matchConditionSchema = z.record(z.unknown()).superRefine((obj, ctx) => {
   }
 });
 
+// Plan 12 — callbacks. delayMs is capped at 5000 in this pass: that is the
+// `waitUntil` path, which needs no queue infrastructure. Longer delays (the
+// callback_queue + cron path) are a follow-up.
+export const callbackSchema = z
+  .object({
+    url: z.string().url().startsWith("https://", "callback url must be https://"),
+    method: z.enum(["POST", "PUT", "PATCH", "GET", "DELETE"]).default("POST"),
+    delayMs: z.number().int().min(0).max(5000).default(0),
+    headers: z.record(z.string()).optional(),
+    body: z.unknown().optional(),
+    retry: z
+      .object({ attempts: z.number().int().min(1).max(3).default(1), backoffMs: z.number().int().min(0).max(5000).default(1000) })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 export const ruleSchema = z
   .object({
     id: z.string().min(1),
@@ -208,6 +283,17 @@ export const ruleSchema = z
       .strict(),
     response: mockResponseSchema.optional(),
     responses: responseVariantsSchema.optional(),
+    callback: callbackSchema.optional(),
+    // Plan 22 — per-rule drift-check tuning. `acknowledgeUnsafeMethod` is the
+    // "genuinely bad day" gate: even with the project's driftConfig allowing
+    // unsafe methods, a POST/PUT/DELETE rule still needs this set explicitly.
+    drift: z
+      .object({
+        ignorePaths: z.array(z.string()).default([]),
+        acknowledgeUnsafeMethod: z.boolean().default(false),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((r, ctx) => {
