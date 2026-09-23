@@ -13,3 +13,6 @@ mocks.generated.json
 
 # SDD scratch — briefs, reports, review packages (progress.md already tracked)
 .superpowers/
+
+# Local CLI link/cache state (vercel link, supabase CLI) — never project config
+supabase/.temp/
